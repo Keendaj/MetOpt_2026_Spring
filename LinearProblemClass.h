@@ -38,9 +38,41 @@ class LPProblem {
         void printConstraints();        
         void printVariableConstraints();
         
+        void pivot(std::vector<std::vector<double>>& table,
+            std::vector<int>& basis,
+            int pivotRow,
+            int pivotCol);
+
+        bool phase1(std::vector<std::vector<double>>& table, 
+            std::vector<int>& basis, 
+            int m_canon, 
+            int n_canon, 
+            const LPProblem& canon,
+            double eps, 
+            int print_k);
+
+        bool phase2(std::vector<std::vector<double>>& table, 
+            std::vector<int>& basis, 
+            int m_canon, 
+            int n_canon, 
+            const LPProblem& canon, 
+            double eps, 
+            int print_k);
+
+        void printTableau(const std::vector<std::vector<double>>& table, 
+            const std::vector<int>& basis, 
+            int m_canon, 
+            int n_canon, 
+            int phase, 
+            int step, 
+            const LPProblem& canon,
+            int minCol, 
+            int minRow, 
+            const std::vector<double>& phaseObj);
     public:
         int n = 0;
         int m = 0; 
+        bool solved = false;
         
         std::vector<std::string> var_names;
         std::vector<std::vector<double>> A;
@@ -49,17 +81,24 @@ class LPProblem {
 
         std::vector<ConstraintType> signs;      
         std::vector<VarSign> var_signs;
+
+        std::vector<double> optimalSolution; 
+        double optimalValue;
+        
+        std::vector<double> optimalCanonicalSolution; 
+        std::vector<std::string> canonicalVarNames;
         
         std::string getSignStr(ConstraintType type);
 
         void input();
         
         void printForms();
-        void solveSimplex(bool verbose = true);
+        bool solveSimplex(double eps = 1e-2, int print_k = 0);
         void solveByVertices();
 
         void printOriginal();
         void printDual();
+        void printResult();
 
         LPProblem toGeneral();
         LPProblem toCanonical();
