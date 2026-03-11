@@ -21,7 +21,7 @@ void printHelp() {
          << "input              - Ввести новую задачу (создает все формы)\n"
          << "pick [type]        - Выбрать активную задачу (original, symmetrical, canonical)\n"
          << "print [type]       - Вывести матрицу (original, dual)\n"
-         << "solve [type]       - Решить задачу (original, dual)\n"
+         << "solve --printSteps [num] [type]       - Решить задачу (original, dual)\n"
          << "print_result [type]- Показать ответ (original, dual)\n"
          << "exit               - Выход\n"
          << "-------------------------\n";
