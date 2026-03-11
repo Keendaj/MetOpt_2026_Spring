@@ -127,28 +127,38 @@ void LPProblem::parseConstraints() {
 
     cout << "3. Введите " << m << " ограничений (например 10x1 + 2x2 <= 20, знаки: =, <=, >=):\n";
     for (int i = 0; i < m; ++i) {
-        cout << i + 1 << ") ";
-        string constrStr;
-        getline(cin, constrStr);
+        while (true) { 
+            cout << i + 1 << ") ";
+            string constrStr;
+            getline(cin, constrStr);
 
-        size_t signPos;
-        if ((signPos = constrStr.find("<=")) != string::npos) {
-            signs[i] = ConstraintType::LEQ;
-            parseExpression(constrStr.substr(0, signPos), A[i]);
-            b[i] = stod(constrStr.substr(signPos + 2));
-        } 
-        else if ((signPos = constrStr.find(">=")) != string::npos) {
-            signs[i] = ConstraintType::GEQ;
-            parseExpression(constrStr.substr(0, signPos), A[i]);
-            b[i] = stod(constrStr.substr(signPos + 2));
-        } 
-        else if ((signPos = constrStr.find("=")) != string::npos) {
-            signs[i] = ConstraintType::EQ;
-            parseExpression(constrStr.substr(0, signPos), A[i]);
-            b[i] = stod(constrStr.substr(signPos + 1));
-        }
-        else {
-            cout << "Ошибка! Строка должна содержать знак '<=', '>=' или '='. Попробуйте еще раз.\n";
+            size_t signPos;
+            bool success = false;
+
+            if ((signPos = constrStr.find("<=")) != string::npos) {
+                signs[i] = ConstraintType::LEQ;
+                parseExpression(constrStr.substr(0, signPos), A[i]);
+                b[i] = stod(constrStr.substr(signPos + 2));
+                success = true;
+            } 
+            else if ((signPos = constrStr.find(">=")) != string::npos) {
+                signs[i] = ConstraintType::GEQ;
+                parseExpression(constrStr.substr(0, signPos), A[i]);
+                b[i] = stod(constrStr.substr(signPos + 2));
+                success = true;
+            } 
+            else if ((signPos = constrStr.find("=")) != string::npos) {
+                signs[i] = ConstraintType::EQ;
+                parseExpression(constrStr.substr(0, signPos), A[i]);
+                b[i] = stod(constrStr.substr(signPos + 1));
+                success = true;
+            }
+
+            if (success) {
+                break;
+            } else {
+                cout << "Ошибка! Строка должна содержать знак '<=', '>=' или '='. Попробуйте еще раз.\n";
+            }
         }
     }
 }
@@ -320,56 +330,6 @@ void LPProblem::printOriginal() {
     printVariableConstraints();
 }
 
-void LPProblem::printDual() {
-    cout << "G(y) = ";
-    bool first = true;
-    for (int i = 0; i < m; ++i) {
-        printTerm(b[i], "y" + to_string(i + 1), first);
-    }
-    if (first) {
-        cout << "0";
-    }
-    cout << " -> " << (isMin ? "max" : "min") << "\n\n";
-
-    cout << "Ограничения двойственной задачи:\n";
-    for (int j = 0; j < n; ++j) {
-        first = true;
-        for (int i = 0; i < m; ++i) {
-            printTerm(A[i][j], "y" + to_string(i + 1), first);
-        }
-        if (first) {
-            cout << "0";
-        }
-
-        if (var_signs[j] == VarSign::POSITIVE) {
-            cout << (isMin ? " <= " : " >= ") << c[j] << "\n";
-        } 
-        else if (var_signs[j] == VarSign::NEGATIVE) {
-            cout << (isMin ? " >= " : " <= ") << c[j] << "\n";
-        } 
-        else {
-            cout << " = " << c[j] << "\n";
-        }
-    }
-
-    cout << "\nОграничения на переменные y_i:\n";
-    for (int i = 0; i < m; ++i) {
-        cout << "y" << i + 1;
-
-        if (signs[i] == ConstraintType::GEQ) {
-            cout << (isMin ? " >= 0" : " <= 0");
-        } 
-        else if (signs[i] == ConstraintType::LEQ) {
-            cout << (isMin ? " <= 0" : " >= 0");
-        } 
-        else {
-            cout << " - свободная";
-        }
-        
-        cout << "\n";
-    }
-}
-
 LPProblem LPProblem::toGeneral() {
     LPProblem res = *this;
     
@@ -528,51 +488,51 @@ LPProblem LPProblem::toSymmetric() {
     return res;
 }
 
-void LPProblem::printForms() {
-    cout << "\n========================================\n";
-    cout << "       ПОЛНЫЙ АНАЛИЗ ФОРМ ЗАДАЧИ        \n";
-    cout << "========================================\n";
+LPProblem LPProblem::toDual() {
+    LPProblem dual;
+    dual.isMin = !this->isMin;
+    dual.m = this->n;
+    dual.n = this->m; 
 
-    ProblemForm currentForm = determineForm();
-
-
-    cout << "\n>>> ИСХОДНАЯ ЗАДАЧА (ВВЕДЕННАЯ ПОЛЬЗОВАТЕЛЕМ) <<<\n";
-    printOriginal();
-    cout << "\n>>> ВЫВОД ДВОЙСТЕННОЙ ЗАДАЧИ К ТЕКУЩЕЙ <<<\n";
-    printDual();
-
-    if (currentForm != ProblemForm::GENERAL) {
-        cout << "\n>>> ПРИВЕДЕНИЕ К ОБЩЕЙ ФОРМЕ (ИСКУССТВЕННОЕ УСЛОЖНЕНИЕ) <<<\n";
-        LPProblem general = toGeneral();
-        general.printOriginal();
-        cout << "\n>>> ВЫВОД ДВОЙСТЕННОЙ ЗАДАЧИ К ТЕКУЩЕЙ <<<\n";
-        general.printDual();
-    } 
-    else {
-        cout << "\n[!] Задача уже в общей форме, пропуск шага приведения.\n";
+    dual.c = this->b;
+    for (int i = 1; i <= dual.n; ++i) {
+        dual.var_names.push_back("y" + std::to_string(i));
     }
 
-    if (currentForm != ProblemForm::CANONICAL) {
-        cout << "\n>>> ПРИВЕДЕНИЕ К КАНОНИЧЕСКОЙ ФОРМЕ <<<\n";
-        LPProblem canonical = toCanonical();
-        canonical.printOriginal();
-        cout << "\n>>> ВЫВОД ДВОЙСТЕННОЙ ЗАДАЧИ К ТЕКУЩЕЙ <<<\n";
-        canonical.printDual();
-    } 
-    else {
-        cout << "\n[!] Задача уже в канонической форме, пропуск шага приведения.\n";
+    dual.A.assign(dual.m, std::vector<double>(dual.n));
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            dual.A[j][i] = this->A[i][j];
+        }
     }
 
-    if (currentForm != ProblemForm::SYMMETRIC) {
-        cout << "\n>>> ПРИВЕДЕНИЕ К СИММЕТРИЧНОЙ ФОРМЕ <<<\n";
-        LPProblem symmetric = toSymmetric();
-        symmetric.printOriginal();
-        cout << "\n>>> ВЫВОД ДВОЙСТЕННОЙ ЗАДАЧИ К ТЕКУЩЕЙ <<<\n";
-        symmetric.printDual();
-    } 
-    else {
-        cout << "\n[!] Задача уже в симметричной форме, пропуск шага приведения.\n";
+    dual.b = this->c;
+
+    for (int i = 0; i < m; ++i) {
+        if (signs[i] == ConstraintType::EQ) {
+            dual.var_signs.push_back(VarSign::FREE);
+        } 
+        else if (signs[i] == ConstraintType::GEQ) {
+            dual.var_signs.push_back(isMin ? VarSign::POSITIVE : VarSign::NEGATIVE);
+        } 
+        else if (signs[i] == ConstraintType::LEQ) {
+            dual.var_signs.push_back(isMin ? VarSign::NEGATIVE : VarSign::POSITIVE);
+        }
     }
+
+    for (int j = 0; j < n; ++j) {
+        if (var_signs[j] == VarSign::FREE) {
+            dual.signs.push_back(ConstraintType::EQ);
+        } 
+        else if (var_signs[j] == VarSign::POSITIVE) {
+            dual.signs.push_back(isMin ? ConstraintType::LEQ : ConstraintType::GEQ);
+        } 
+        else if (var_signs[j] == VarSign::NEGATIVE) {
+            dual.signs.push_back(isMin ? ConstraintType::GEQ : ConstraintType::LEQ);
+        }
+    }
+
+    return dual;
 }
 
 void LPProblem::pivot(vector<vector<double>>& table, 
@@ -953,34 +913,25 @@ void LPProblem::printResult() {
     cout << "  F* = " << fixed << setprecision(3) << optimalValue << "\n\n";
 
     cout << "Оптимальный план (исходные переменные):\n";
-    cout << "  X* = (";
-    for (size_t j = 0; j < optimalSolution.size(); ++j) {
-        cout << fixed << setprecision(3) << optimalSolution[j];
-        if (j < optimalSolution.size() - 1) {
-            cout << "; ";
-        }
-    }
-    cout << ")\n\n";
-
-    cout << "Расшифровка исходных переменных:\n";
-    for (int j = 0; j < n; ++j) {
+    for (int j = 0; j < (int)optimalSolution.size(); ++j) {
         string name = (j < (int)var_names.size()) ? var_names[j] : "x" + to_string(j + 1);
-        cout << "  " << setw(6) << name << " = " << setw(8) << fixed << setprecision(3) << optimalSolution[j] << "\n";
+        cout << "  " << left << setw(10) << name << " = " << right << setw(10) << fixed << setprecision(3) << optimalSolution[j] << "\n";
     }
-    cout << "\n";
 
-    cout << "Оптимальный план (каноническая форма):\n";
-    for (size_t j = 0; j < optimalCanonicalSolution.size(); ++j) {
-        string name = (j < canonicalVarNames.size()) ? canonicalVarNames[j] : "x_can_" + to_string(j + 1);
-        
-        cout << "  " << setw(6) << name << " = " << setw(8) << fixed << setprecision(3) << optimalCanonicalSolution[j];
-        
-        if (abs(optimalCanonicalSolution[j]) < 1e-7) {
-            cout << "  (небазисная/нулевая)";
-        } else {
-            cout << "  (базисная)";
+    if (!optimalCanonicalSolution.empty()) {
+        cout << "\nОптимальный план (каноническая форма):\n";
+        for (size_t j = 0; j < optimalCanonicalSolution.size(); ++j) {
+            string name = (j < canonicalVarNames.size()) ? canonicalVarNames[j] : "x_can" + to_string(j + 1);
+            
+            cout << "  " << left << setw(10) << name << " = " << right << setw(10) << fixed << setprecision(3) << optimalCanonicalSolution[j];
+            
+            if (abs(optimalCanonicalSolution[j]) < 1e-9) {
+                cout << "  (нулевая)";
+            } else {
+                cout << "  (базисная)";
+            }
+            cout << "\n";
         }
-        cout << "\n";
     }
     cout << "======================================================\n\n";
 }

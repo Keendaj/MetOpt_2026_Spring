@@ -97,12 +97,12 @@ class LPProblem {
         void solveByVertices();
 
         void printOriginal();
-        void printDual();
         void printResult();
 
         LPProblem toGeneral();
         LPProblem toCanonical();
         LPProblem toSymmetric();
+        LPProblem toDual();
 
         ProblemForm determineForm();
 };

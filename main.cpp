@@ -35,6 +35,7 @@ int main() {
 
 
     map<string, LPProblem> problems;
+    map<string, LPProblem> dualProblems;
     string activeType = "original";
     string command;
 
@@ -54,9 +55,12 @@ int main() {
             LPProblem orig;
             orig.input();
             problems["original"] = orig;
+            dualProblems["original"] = orig.toDual();
 
             problems["symmetrical"] = orig.toSymmetric();
+            dualProblems["symmetrical"] = problems["symmetrical"].toDual();
             problems["canonical"] = orig.toCanonical();
+            dualProblems["canonical"] = problems["canonical"].toDual();
             
             cout << "[+] Задача сохранена во всех формах.\n";
         } 
@@ -75,26 +79,48 @@ int main() {
             cin >> sub;
             if (sub == "original") {
                 problems[activeType].printOriginal();
-            } else if (sub == "dual") {
-                 problems[activeType].printDual();
+            } 
+            else if (sub == "dual") {
+                dualProblems[activeType].printOriginal();
             }
         } 
         else if (command == "solve") {
             string sub;
             cin >> sub;
-            if (sub == "original") {
-                if (problems[activeType].solveSimplex(1e-6, 1)) {
+            if(sub == "--printSteps"){
+                cin >> sub;
+                if(int step = std::stoi(sub)){
+                    cin >> sub;
+                    if (sub == "original") {
+                        if (problems[activeType].solveSimplex(1e-6, step)) {
+                            cout << "[+] Решение завершено успешно.\n";
+                        }
+                    } 
+                    else if (sub == "dual") {
+                        if (dualProblems[activeType].solveSimplex(1e-6, step)) {
+                            cout << "[+] Решение завершено успешно.\n";
+                        }
+                    }
+                }
+            }
+            else if (sub == "original") {
+                if (problems[activeType].solveSimplex(1e-6, 0)) {
                     cout << "[+] Решение завершено успешно.\n";
                 }
             } 
             else if (sub == "dual") {
-                cout << "[!] Заглушка: Решение двойственной задачи скоро появится.\n";
+                if (dualProblems[activeType].solveSimplex(1e-6, 0)) {
+                    cout << "[+] Решение завершено успешно.\n";
+                }
             }
         } 
         else if (command == "print_result") {
             string sub;
             cin >> sub;
-            if (problems.count(activeType) && problems[activeType].solved) {
+            if(sub == "dual" && dualProblems.count(activeType) && dualProblems[activeType].solved){
+                dualProblems[activeType].printResult();
+            }
+            else if (sub == "original" && problems.count(activeType) && problems[activeType].solved) {
                 problems[activeType].printResult();
             }
             else{
