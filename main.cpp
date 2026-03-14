@@ -1,4 +1,7 @@
 #include <iostream>
+#include <sstream>
+#include <limits>
+#include <climits>
 #include <string>
 #include <map>
 #include <vector>
@@ -10,6 +13,9 @@ using std::string;
 using std::vector;
 using std::map;
 using std::endl;
+using std::istringstream;
+using std::numeric_limits;
+using std::streamsize;
 
 #ifdef _WIN32
 #include <windows.h>
@@ -21,7 +27,8 @@ void printHelp() {
          << "input              - Ввести новую задачу (создает все формы)\n"
          << "pick [type]        - Выбрать активную задачу (original, symmetrical, canonical)\n"
          << "print [type]       - Вывести матрицу (original, dual)\n"
-         << "solve --printSteps [num] [type]       - Решить задачу (original, dual)\n"
+         << "solve_simplex --printSteps [num] [type]  - Решить задачу симплекс-методом (original, dual)\n"
+         << "solve_vertices --printSteps [num] [type] - Решить задачу методом перебора крайних точек(original, dual)\n"
          << "print_result [type]- Показать ответ (original, dual)\n"
          << "exit               - Выход\n"
          << "-------------------------\n";
@@ -42,9 +49,16 @@ int main() {
     cout << "Программа для решения задач ЛП запущена. Введите 'input' для начала.\n";
     printHelp();
 
-    while (true) {
+   while (true) {
         cout << "\n[" << activeType << "] > ";
-        cin >> command;
+        
+        string line;
+        if (!getline(cin, line)) break; 
+
+        istringstream iss(line);
+        string command;
+        
+        if (!(iss >> command)) continue; 
 
         if (command == "exit") break;
 
@@ -54,6 +68,7 @@ int main() {
         else if (command == "input") {
             LPProblem orig;
             orig.input();
+
             problems["original"] = orig;
             dualProblems["original"] = orig.toDual();
 
@@ -66,71 +81,96 @@ int main() {
         } 
         else if (command == "pick") {
             string type;
-            cin >> type;
-            if (problems.count(type)) {
-                activeType = type;
-                cout << "[*] Активная задача: " << type << endl;
+            if (iss >> type) {
+                if (problems.count(type)) {
+                    activeType = type;
+                    cout << "[*] Активная задача: " << type << endl;
+                } else {
+                    cout << "[!] Ошибка: Тип '" << type << "' не найден. Сначала введите задачу.\n";
+                }
             } else {
-                cout << "[!] Ошибка: Тип '" << type << "' не найден. Сначала введите задачу.\n";
+                cout << "[!] Ошибка: Укажите тип задачи (например, pick original).\n";
             }
         } 
         else if (command == "print") {
             string sub;
-            cin >> sub;
-            if (sub == "original") {
-                problems[activeType].printOriginal();
-            } 
-            else if (sub == "dual") {
-                dualProblems[activeType].printOriginal();
+            if (iss >> sub) {
+                if (sub == "original") {
+                    problems[activeType].printOriginal();
+                } else if (sub == "dual") {
+                    dualProblems[activeType].printOriginal();
+                } else {
+                    cout << "[!] Ошибка: Укажите 'original' или 'dual'.\n";
+                }
+            } else {
+                cout << "[!] Ошибка: Недостаточно аргументов.\n";
             }
         } 
-        else if (command == "solve") {
-            string sub;
-            cin >> sub;
-            if(sub == "--printSteps"){
-                cin >> sub;
-                if(int step = std::stoi(sub)){
-                    cin >> sub;
-                    if (sub == "original") {
-                        if (problems[activeType].solveSimplex(1e-6, step)) {
-                            cout << "[+] Решение завершено успешно.\n";
+        else if (command == "solve_simplex" || command == "solve_vertices") {
+            string arg1;
+            int step = 0;
+            string sub = "";
+
+            if (iss >> arg1) {
+                if (arg1 == "--printSteps") {
+                    string stepStr;
+                    if (iss >> stepStr) {
+                        try {
+                            step = std::stoi(stepStr);
+                        } catch (...) {
+                            cout << "[!] Ошибка: Неверный формат шага.\n";
+                            continue;
                         }
-                    } 
-                    else if (sub == "dual") {
-                        if (dualProblems[activeType].solveSimplex(1e-6, step)) {
-                            cout << "[+] Решение завершено успешно.\n";
+
+                        if (!(iss >> sub)) {
+                            cout << "[!] Ошибка: После шага укажите 'original' или 'dual'.\n";
+                            continue;
                         }
+                    } else {
+                        cout << "[!] Ошибка: Укажите число шагов после --printSteps.\n";
+                        continue;
                     }
+                } else {
+                    sub = arg1;
                 }
-            }
-            else if (sub == "original") {
-                if (problems[activeType].solveSimplex(1e-6, 0)) {
-                    cout << "[+] Решение завершено успешно.\n";
+
+                bool success = false;
+                if (sub == "original") {
+                    success = (command == "solve_simplex") 
+                              ? problems[activeType].solveSimplex(1e-6, step) 
+                              : problems[activeType].solveByVertices(step);
+                } else if (sub == "dual") {
+                    success = (command == "solve_simplex") 
+                              ? dualProblems[activeType].solveSimplex(1e-6, step) 
+                              : dualProblems[activeType].solveByVertices(step);
+                } else {
+                    cout << "[!] Ошибка: Неизвестный параметр '" << sub << "'. Ожидается 'original' или 'dual'.\n";
+                    continue;
                 }
-            } 
-            else if (sub == "dual") {
-                if (dualProblems[activeType].solveSimplex(1e-6, 0)) {
-                    cout << "[+] Решение завершено успешно.\n";
-                }
+
+                if (success) cout << "[+] Решение завершено успешно.\n";
+                else cout << "[!] Метод не смог найти решение.\n";
+            } else {
+                cout << "[!] Ошибка: Недостаточно аргументов.\n";
             }
         } 
         else if (command == "print_result") {
             string sub;
-            cin >> sub;
-            if(sub == "dual" && dualProblems.count(activeType) && dualProblems[activeType].solved){
-                dualProblems[activeType].printResult();
+            if (iss >> sub) {
+                if (sub == "dual" && dualProblems.count(activeType) && dualProblems[activeType].solved) {
+                    dualProblems[activeType].printResult();
+                } else if (sub == "original" && problems.count(activeType) && problems[activeType].solved) {
+                    problems[activeType].printResult();
+                } else {
+                    cout << "[!] Такой проблемы нет, либо она еще не была решена.\n";
+                }
+            } else {
+                cout << "[!] Ошибка: Укажите 'original' или 'dual'.\n";
             }
-            else if (sub == "original" && problems.count(activeType) && problems[activeType].solved) {
-                problems[activeType].printResult();
-            }
-            else{
-                cout << "[!] Такой проблемы нет, либо она ещё не была решена.\n";
-            }
-        }
+        } 
         else {
             cout << "[?] Неизвестная команда. Введите 'help'.\n";
         }
     }
-
     return 0;
 }

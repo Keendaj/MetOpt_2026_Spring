@@ -59,7 +59,7 @@ class LPProblem {
             double eps, 
             int print_k);
 
-        void printTableau(const std::vector<std::vector<double>>& table, 
+        void printTable(const std::vector<std::vector<double>>& table, 
             const std::vector<int>& basis, 
             int m_canon, 
             int n_canon, 
@@ -69,6 +69,17 @@ class LPProblem {
             int minCol, 
             int minRow, 
             const std::vector<double>& phaseObj);
+
+        bool invertMatrix(const std::vector<std::vector<double>>& B, 
+                      std::vector<std::vector<double>>& B_inv, 
+                      double eps);
+
+        bool isOneSwap(const std::vector<int>& old_basis, 
+                    const std::vector<int>& new_basis, 
+                    int& in_var, int& out_var);
+
+        bool isFeasible(const std::vector<double>& x, double eps);
+        double calculateObjectiveValue(const std::vector<double>& x, const std::vector<double>& c);
     public:
         int n = 0;
         int m = 0; 
@@ -94,7 +105,7 @@ class LPProblem {
         
         void printForms();
         bool solveSimplex(double eps = 1e-2, int print_k = 0);
-        void solveByVertices();
+        bool solveByVertices(int print_k = 0);
 
         void printOriginal();
         void printResult();

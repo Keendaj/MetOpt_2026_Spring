@@ -91,9 +91,6 @@ void LPProblem::parseExpression(const string& expr, vector<double>& row) {
 }
 
 void LPProblem::parseObjectiveFunction() {
-    if (cin.peek() == '\n') {
-        cin.ignore();
-    }
     cout << "1. Введите целевую функцию (например 10x1 + 10x2 + 10x3 + 10x4):\nF(x) = ";
     string funcStr;
     getline(cin, funcStr);
@@ -609,7 +606,7 @@ bool LPProblem::phase1(vector<vector<double>>& table,
 
         if (print_k > 0) {
             if (step % print_k == 0 || step == 1 || isOptimal) {
-                printTableau(table, basis, m_canon, n_canon, 1, step, *this, minCol, minRow, phaseObj);
+                printTable(table, basis, m_canon, n_canon, 1, step, *this, minCol, minRow, phaseObj);
             }
         }
 
@@ -711,7 +708,7 @@ bool LPProblem::phase2(vector<vector<double>>& table,
 
         if (print_k > 0) {
             if (step % print_k == 0 || step == 1 || isOptimal) {
-                printTableau(table, basis, m_canon, n_canon, 2, step, canon, minCol, minRow, phaseObj);
+                printTable(table, basis, m_canon, n_canon, 2, step, canon, minCol, minRow, phaseObj);
             }
         }
 
@@ -803,7 +800,7 @@ bool LPProblem::solveSimplex(double eps, int print_k) {
     return true;
 }
 
-void LPProblem::printTableau(const vector<vector<double>>& table, 
+void LPProblem::printTable(const vector<vector<double>>& table, 
     const vector<int>& basis, 
     int m_canon, 
     int n_canon, 
@@ -934,4 +931,254 @@ void LPProblem::printResult() {
         }
     }
     cout << "======================================================\n\n";
+}
+
+bool LPProblem::invertMatrix(const std::vector<std::vector<double>>& B, std::vector<std::vector<double>>& B_inv, double eps) {
+    int size = B.size();
+    std::vector<std::vector<double>> aug(size, std::vector<double>(2 * size, 0.0));
+
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) aug[i][j] = B[i][j];
+        aug[i][size + i] = 1.0;
+    }
+
+    for (int i = 0; i < size; ++i) {
+        int pivot = i;
+        for (int j = i + 1; j < size; ++j) {
+            if (std::abs(aug[j][i]) > std::abs(aug[pivot][i])) pivot = j;
+        }
+        
+        if (std::abs(aug[pivot][i]) < eps) return false;
+        std::swap(aug[i], aug[pivot]);
+        double div = aug[i][i];
+        for (int j = i; j < 2 * size; ++j) aug[i][j] /= div;
+
+        for (int j = 0; j < size; ++j) {
+            if (i != j) {
+                double factor = aug[j][i];
+                for (int k = i; k < 2 * size; ++k) aug[j][k] -= factor * aug[i][k];
+            }
+        }
+    }
+
+    B_inv.assign(size, std::vector<double>(size));
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) B_inv[i][j] = aug[i][size + j];
+    }
+    return true;
+}
+
+bool LPProblem::isOneSwap(const std::vector<int>& old_basis, const std::vector<int>& new_basis, int& in_var, int& out_var) {
+    std::vector<int> diff_in, diff_out;
+    std::set_difference(new_basis.begin(), new_basis.end(), old_basis.begin(), old_basis.end(), std::back_inserter(diff_in));
+    std::set_difference(old_basis.begin(), old_basis.end(), new_basis.begin(), new_basis.end(), std::back_inserter(diff_out));
+    
+    if (diff_in.size() == 1 && diff_out.size() == 1) {
+        in_var = diff_in[0];
+        out_var = diff_out[0];
+        return true;
+    }
+    return false;
+}
+
+bool LPProblem::isFeasible(const std::vector<double>& x, double eps) {
+    for (double val : x) {
+        if (val < -eps) return false;
+    }
+    return true;
+}
+
+double LPProblem::calculateObjectiveValue(const std::vector<double>& x, const std::vector<double>& c) {
+    double z = 0.0;
+    for (size_t i = 0; i < x.size(); ++i) z += c[i] * x[i];
+    return z;
+}
+
+bool LPProblem::solveByVertices(int print_k) {
+    LPProblem canon = this->toCanonical();
+    int m_c = canon.m; 
+    int n_c = canon.n; 
+    const double eps = 1e-7; 
+
+    if (m_c > n_c) {
+        std::cerr << "Ошибка: Ограничений больше, чем переменных." << std::endl;
+        this->solved = false;
+        return false;
+    }
+
+    std::vector<int> bitmask(n_c, 0);
+    std::fill(bitmask.end() - m_c, bitmask.end(), 1);
+
+    double best_z = canon.isMin ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
+    std::vector<double> best_x;
+    bool found_feasible = false;
+
+    std::vector<int> current_basis_arr;
+    std::vector<std::vector<double>> current_B_inv;
+    bool has_valid_inverse = false;
+
+    int stat_total = 0, stat_gauss = 0, stat_recurrent = 0;
+
+    int step = 1;
+
+    if (print_k > 0) {
+        std::cout << "\n================================================================================================================================\n";
+        std::cout << "Набор базиса B           Полученное решение x (канонич.)                                             Допустимость   F(x)\n";
+        std::cout << "--------------------------------------------------------------------------------------------------------------------------------\n";
+    }
+
+    do {
+        stat_total++;
+        std::vector<int> target_combo;
+        for (int i = 0; i < n_c; ++i) {
+            if (bitmask[i] == 1) target_combo.push_back(i);
+        }
+
+        int in_var = -1, out_var = -1;
+        bool use_formula = false;
+
+        if (has_valid_inverse && isOneSwap(current_basis_arr, target_combo, in_var, out_var)) {
+            use_formula = true;
+        }
+
+        if (use_formula) {
+            int p = -1;
+            for (int i = 0; i < m_c; ++i) {
+                if (current_basis_arr[i] == out_var) { p = i; break; }
+            }
+            std::vector<double> Y(m_c, 0.0);
+            for (int i = 0; i < m_c; ++i) {
+                for (int j = 0; j < m_c; ++j) {
+                    Y[i] += current_B_inv[i][j] * canon.A[j][in_var];
+                }
+            }
+
+            if (std::abs(Y[p]) < eps) {
+                has_valid_inverse = false; 
+            } else {
+                stat_recurrent++;
+                std::vector<std::vector<double>> next_B_inv = current_B_inv;
+                double Y_p = Y[p];
+
+                for (int j = 0; j < m_c; ++j) next_B_inv[p][j] /= Y_p;
+
+                for (int i = 0; i < m_c; ++i) {
+                    if (i == p) continue;
+                    double factor = Y[i];
+                    for (int j = 0; j < m_c; ++j) {
+                        next_B_inv[i][j] -= factor * next_B_inv[p][j];
+                    }
+                }
+                current_B_inv = next_B_inv;
+                current_basis_arr[p] = in_var;
+            }
+        } else {
+            has_valid_inverse = false;
+        }
+
+        if (!has_valid_inverse) {
+            stat_gauss++;
+            current_basis_arr = target_combo;
+            std::vector<std::vector<double>> B(m_c, std::vector<double>(m_c));
+            for (int i = 0; i < m_c; ++i) {
+                for (int j = 0; j < m_c; ++j) {
+                    B[i][j] = canon.A[i][current_basis_arr[j]];
+                }
+            }
+            has_valid_inverse = invertMatrix(B, current_B_inv, eps);
+        }
+
+       if (has_valid_inverse) {
+            std::vector<double> x_B(m_c, 0.0);
+            for (int i = 0; i < m_c; ++i) {
+                for (int j = 0; j < m_c; ++j) {
+                    x_B[i] += current_B_inv[i][j] * canon.b[j];
+                }
+                if (std::abs(x_B[i]) < eps) x_B[i] = 0.0;
+            }
+
+            std::vector<double> x_full(n_c, 0.0);
+            for (int i = 0; i < m_c; ++i) {
+                x_full[current_basis_arr[i]] = x_B[i];
+            }
+
+            bool is_curr_feasible = isFeasible(x_B, eps);
+            double z = 0.0;
+
+            if (is_curr_feasible) {
+                z = calculateObjectiveValue(x_full, canon.c);
+                if (!found_feasible || (canon.isMin ? (z < best_z) : (z > best_z))) {
+                    best_z = z;
+                    best_x = x_full;
+                    found_feasible = true;
+                }
+            }
+
+            if (print_k > 0 && (step % print_k == 0 || step == 1)) {
+                std::string basis_str = "{";
+                for (int i = 0; i < m_c; ++i) {
+                    basis_str += canon.var_names[current_basis_arr[i]];
+                    if (i < m_c - 1) basis_str += ", ";
+                }
+                basis_str += "}";
+
+                std::ostringstream x_stream;
+                x_stream << "(";
+
+                x_stream << std::fixed << std::setprecision(2);
+                for (int i = 0; i < n_c; ++i) {
+                    double val = (std::abs(x_full[i]) < eps) ? 0.0 : x_full[i]; 
+                    x_stream << val; 
+                    if (i < n_c - 1) x_stream << ", ";
+                }
+                x_stream << ")";
+
+                std::cout << std::left << std::setw(25) << basis_str 
+                          << std::setw(75) << x_stream.str();
+
+                if (is_curr_feasible) {
+                    std::cout << "да             " << std::fixed << std::setprecision(2) << z << "\n";
+                    std::cout.unsetf(std::ios_base::fixed); 
+                } else {
+                    std::cout << "нет            —\n";
+                }
+            }
+        }
+
+        step++;
+    } while (std::next_permutation(bitmask.begin(), bitmask.end()));
+
+    this->solved = found_feasible;
+    
+    if (print_k > 0) {
+        std::cout << "====================================================================================================\n";
+    }
+
+    if (found_feasible) {
+        this->optimalValue = best_z;
+        this->optimalCanonicalSolution = best_x;
+        this->canonicalVarNames = canon.var_names;
+
+        this->optimalSolution.clear();
+        int c_idx = 0;
+        for (int j = 0; j < this->n; ++j) {
+            double val = 0.0;
+            if (this->var_signs[j] == VarSign::FREE) {
+                val = best_x[c_idx] - best_x[c_idx + 1];
+                c_idx += 2;
+            } else if (this->var_signs[j] == VarSign::NEGATIVE) {
+                val = -best_x[c_idx];
+                c_idx += 1;
+            } else {
+                val = best_x[c_idx];
+                c_idx += 1;
+            }
+            this->optimalSolution.push_back(val);
+        }
+    }
+    else{
+        return false;   
+    }
+
+    return true;
 }
