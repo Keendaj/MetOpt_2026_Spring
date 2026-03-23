@@ -38,10 +38,10 @@ class LPProblem {
         void printConstraints();        
         void printVariableConstraints();
         
-        void pivot(std::vector<std::vector<double>>& table,
+        void JordanStep(std::vector<std::vector<double>>& table,
             std::vector<int>& basis,
-            int pivotRow,
-            int pivotCol);
+            int JordanStepRow,
+            int JordanStepCol);
 
         bool phase1(std::vector<std::vector<double>>& table, 
             std::vector<int>& basis, 

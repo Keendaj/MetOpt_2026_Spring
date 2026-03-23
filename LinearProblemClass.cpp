@@ -532,27 +532,27 @@ LPProblem LPProblem::toDual() {
     return dual;
 }
 
-void LPProblem::pivot(vector<vector<double>>& table, 
+void LPProblem::JordanStep(vector<vector<double>>& table, 
     vector<int>& basis, 
-    int pivotRow, 
-    int pivotCol) {
+    int JordanStepRow, 
+    int JordanStepCol) {
     int cols = table[0].size();
     int m_canon = basis.size();
-    double pVal = table[pivotRow][pivotCol];
+    double pVal = table[JordanStepRow][JordanStepCol];
     
     for (int j = 0; j < cols; ++j) {
-        table[pivotRow][j] /= pVal;
+        table[JordanStepRow][j] /= pVal;
     }
     
     for (int i = 0; i <= m_canon; ++i) {
-        if (i != pivotRow) {
-            double factor = table[i][pivotCol];
+        if (i != JordanStepRow) {
+            double factor = table[i][JordanStepCol];
             for (int j = 0; j < cols; ++j) {
-                table[i][j] -= factor * table[pivotRow][j];
+                table[i][j] -= factor * table[JordanStepRow][j];
             }
         }
     }
-    basis[pivotRow] = pivotCol;
+    basis[JordanStepRow] = JordanStepCol;
 }
 
 bool LPProblem::phase1(vector<vector<double>>& table, 
@@ -630,7 +630,7 @@ bool LPProblem::phase1(vector<vector<double>>& table,
             }
         }
 
-        pivot(table, basis, minRow, minCol);
+        JordanStep(table, basis, minRow, minCol);
         step++;
     }
 
@@ -730,7 +730,7 @@ bool LPProblem::phase2(vector<vector<double>>& table,
             }
         }
 
-        pivot(table, basis, minRow, minCol);
+        JordanStep(table, basis, minRow, minCol);
         step++;
     }
 
@@ -943,13 +943,13 @@ bool LPProblem::invertMatrix(const std::vector<std::vector<double>>& B, std::vec
     }
 
     for (int i = 0; i < size; ++i) {
-        int pivot = i;
+        int JordanStep = i;
         for (int j = i + 1; j < size; ++j) {
-            if (std::abs(aug[j][i]) > std::abs(aug[pivot][i])) pivot = j;
+            if (std::abs(aug[j][i]) > std::abs(aug[JordanStep][i])) JordanStep = j;
         }
         
-        if (std::abs(aug[pivot][i]) < eps) return false;
-        std::swap(aug[i], aug[pivot]);
+        if (std::abs(aug[JordanStep][i]) < eps) return false;
+        std::swap(aug[i], aug[JordanStep]);
         double div = aug[i][i];
         for (int j = i; j < 2 * size; ++j) aug[i][j] /= div;
 
