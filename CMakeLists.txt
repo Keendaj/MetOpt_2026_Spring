@@ -11,5 +11,5 @@ endif()
 
 add_executable(lp_solver 
     main.cpp 
-    LinearProblemClass.cpp
+    TransportProblem.cpp
 )
