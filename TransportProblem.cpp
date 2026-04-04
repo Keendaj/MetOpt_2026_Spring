@@ -58,11 +58,20 @@ void TransportProblem::buildNorthWestCorner() {
         plan[i][j].isBasic = true;
         double x = min(a_copy[i], b_copy[j]);
         plan[i][j].amount = x;
-        a_copy[i] -= x; b_copy[j] -= x;
+        a_copy[i] -= x;
+        b_copy[j] -= x;
 
         if (abs(a_copy[i]) < 1e-9 && abs(b_copy[j]) < 1e-9) {
-            if (i + 1 < m && j + 1 < n) { i++; plan[i][j].isBasic = true; } 
-            else { i++; j++; }
+            if (i + 1 < m && j + 1 < n) 
+            {
+                i++;
+                plan[i][j].isBasic = true; 
+            } 
+            else 
+            { 
+                i++;
+                j++;
+            }
         } 
         else if (abs(a_copy[i]) < 1e-9) i++;
         else j++;
@@ -71,15 +80,25 @@ void TransportProblem::buildNorthWestCorner() {
 
 bool TransportProblem::calculatePotentials(vector<double>& u, vector<double>& v) {
     vector<bool> u_calc(m, false), v_calc(n, false);
-    u[0] = 0.0; u_calc[0] = true;
+    u[0] = 0.0; 
+    u_calc[0] = true;
     bool changed = true;
     while (changed) {
         changed = false;
         for (int i = 0; i < m; ++i) {
             for (int j = 0; j < n; ++j) {
                 if (plan[i][j].isBasic) {
-                    if (u_calc[i] && !v_calc[j]) { v[j] = C[i][j] - u[i]; v_calc[j] = true; changed = true; } 
-                    else if (!u_calc[i] && v_calc[j]) { u[i] = C[i][j] - v[j]; u_calc[i] = true; changed = true; }
+                    if (u_calc[i] && !v_calc[j]) 
+                    { 
+                        v[j] = C[i][j] - u[i]; 
+                        v_calc[j] = true; 
+                        changed = true; 
+                    } 
+                    else if (!u_calc[i] && v_calc[j]) {
+                        u[i] = C[i][j] - v[j]; 
+                        u_calc[i] = true; 
+                        changed = true; 
+                    }
                 }
             }
         }
@@ -89,28 +108,56 @@ bool TransportProblem::calculatePotentials(vector<double>& u, vector<double>& v)
     return true;
 }
 
-bool TransportProblem::findCycleDFS(int r, int c, int start_r, int start_c, bool searchHorizontal, 
-                                    vector<vector<bool>>& visited, vector<pair<int, int>>& path) {
-    if (path.size() >= 4 && r == start_r && c == start_c) return true;
-    if (searchHorizontal) {
-        for (int nc = 0; nc < n; ++nc) {
-            if (nc != c && (plan[r][nc].isBasic || (r == start_r && nc == start_c))) {
-                if (!visited[r][nc] || (r == start_r && nc == start_c)) {
-                    visited[r][nc] = true; path.push_back({r, nc});
-                    if (findCycleDFS(r, nc, start_r, start_c, false, visited, path)) return true;
-                    path.pop_back(); visited[r][nc] = false;
+bool TransportProblem::findCycleIterative(int start_r, int start_c, bool startHorizontal, vector<pair<int, int>>& path) {
+    struct State {
+        int r, c;
+        bool isHoriz;
+        int iter;
+    };
+    
+    vector<State> st;
+    vector<vector<bool>> visited(m, vector<bool>(n, false));
+    
+    st.push_back({start_r, start_c, startHorizontal, 0});
+    visited[start_r][start_c] = true;
+    path.push_back({start_r, start_c});
+
+    while (!st.empty()) {
+        auto& curr = st.back();
+        int r = curr.r;
+        int c = curr.c;
+        bool isHoriz = curr.isHoriz;
+
+        bool foundNext = false;
+        int max_iter = isHoriz ? n : m;
+        
+        while (curr.iter < max_iter) {
+            int next_idx = curr.iter++;
+            int nr = isHoriz ? r : next_idx;
+            int nc = isHoriz ? next_idx : c;
+            
+            if ((isHoriz && nc == c) || (!isHoriz && nr == r)) continue;
+
+            if (plan[nr][nc].isBasic || (nr == start_r && nc == start_c)) {
+                if (nr == start_r && nc == start_c && path.size() >= 4) {
+                    path.push_back({nr, nc});
+                    return true;
+                }
+                
+                if (!visited[nr][nc]) {
+                    visited[nr][nc] = true;
+                    path.push_back({nr, nc});
+                    st.push_back({nr, nc, !isHoriz, 0});
+                    foundNext = true;
+                    break;
                 }
             }
         }
-    } else {
-        for (int nr = 0; nr < m; ++nr) {
-            if (nr != r && (plan[nr][c].isBasic || (nr == start_r && c == start_c))) {
-                if (!visited[nr][c] || (nr == start_r && c == start_c)) {
-                    visited[nr][c] = true; path.push_back({nr, c});
-                    if (findCycleDFS(nr, c, start_r, start_c, true, visited, path)) return true;
-                    path.pop_back(); visited[nr][c] = false;
-                }
-            }
+        
+        if (!foundNext) {
+            visited[r][c] = false;
+            path.pop_back();
+            st.pop_back();
         }
     }
     return false;
@@ -162,7 +209,9 @@ bool TransportProblem::solvePotential(int print_k) {
                 if (!plan[i][j].isBasic) {
                     double delta = C[i][j] - (u[i] + v[j]);
                     if (delta < minDelta - 1e-9) {
-                        minDelta = delta; enter_r = i; enter_c = j;
+                        minDelta = delta;
+                        enter_r = i; 
+                        enter_c = j;
                     }
                 }
             }
@@ -172,7 +221,8 @@ bool TransportProblem::solvePotential(int print_k) {
             optimalPotentialValue = 0.0;
             for (int i = 0; i < m; ++i)
                 for (int j = 0; j < n; ++j)
-                    if (plan[i][j].isBasic) optimalPotentialValue += plan[i][j].amount * C[i][j];
+                    if (plan[i][j].isBasic) 
+                        optimalPotentialValue += plan[i][j].amount * C[i][j];
             
             if (print_k > 0) {
                 cout << "[+] План оптимален! (Все оценки Delta >= 0)\n";
@@ -181,13 +231,9 @@ bool TransportProblem::solvePotential(int print_k) {
         }
 
         vector<pair<int, int>> path;
-        vector<vector<bool>> visited(m, vector<bool>(n, false));
-        visited[enter_r][enter_c] = true; path.push_back({enter_r, enter_c});
-        
-        if (!findCycleDFS(enter_r, enter_c, enter_r, enter_c, true, visited, path)) {
-            visited.assign(m, vector<bool>(n, false));
-            visited[enter_r][enter_c] = true; path.clear(); path.push_back({enter_r, enter_c});
-            findCycleDFS(enter_r, enter_c, enter_r, enter_c, false, visited, path);
+        if (!findCycleIterative(enter_r, enter_c, true, path)) {
+            path.clear();
+            findCycleIterative(enter_r, enter_c, false, path);
         }
         path.pop_back();
 
@@ -196,7 +242,9 @@ bool TransportProblem::solvePotential(int print_k) {
         for (size_t k = 1; k < path.size(); k += 2) {
             int r = path[k].first, c = path[k].second;
             if (plan[r][c].amount < theta) {
-                theta = plan[r][c].amount; leave_r = r; leave_c = c;
+                theta = plan[r][c].amount; 
+                leave_r = r; 
+                leave_c = c;
             }
         }
 

@@ -40,9 +40,7 @@ public:
 private:
     void buildNorthWestCorner();
     bool calculatePotentials(std::vector<double>& u, std::vector<double>& v);
-    bool findCycleDFS(int r, int c, int start_r, int start_c, bool searchHorizontal, 
-                      std::vector<std::vector<bool>>& visited, 
-                      std::vector<std::pair<int, int>>& path);
+    bool findCycleIterative(int start_r, int start_c, bool startHorizontal, vector<pair<int, int>>& path);
 
     void JordanStep(std::vector<std::vector<double>>& table, std::vector<int>& basis, int pivotRow, int pivotCol);
     
