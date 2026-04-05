@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <algorithm>
 
 struct TransportCell {
     double amount = 0.0;
@@ -40,7 +41,7 @@ public:
 private:
     void buildNorthWestCorner();
     bool calculatePotentials(std::vector<double>& u, std::vector<double>& v);
-    bool findCycleIterative(int start_r, int start_c, bool startHorizontal, vector<pair<int, int>>& path);
+    bool findCycleIterative(int start_r, int start_c, bool startHorizontal, std::vector<std::pair<int, int>>& path);
 
     void JordanStep(std::vector<std::vector<double>>& table, std::vector<int>& basis, int pivotRow, int pivotCol);
     
