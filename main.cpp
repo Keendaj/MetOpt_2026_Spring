@@ -30,7 +30,7 @@ void printHelp() {
          << "solve_simplex [--print k]   - Решить двухфазным симплекс-методом (k - вывод каждой k-й итерации)\n"
          << "print_potential             - Вывести результат метода потенциалов\n"
          << "print_simplex               - Вывести результат симплекс-метода\n"
-         << "make_open <var> <p1..pm>    - Преобразовать в открытую задачу (var - номер варианта, далее вектор штрафов)\n"
+         << "make_open <var>             - Преобразовать в открытую задачу (var - номер варианта). Штрафы вводятся интерактивно.\n"
          << "\n--- История и редактирование ---\n"
          << "save <name>                 - Сохранить текущую задачу в историю\n"
          << "load <name>                 - Загрузить задачу из истории\n"
@@ -254,19 +254,39 @@ int main() {
                 try { variant_num = std::stoi(varStr); } 
                 catch (...) { cout << "[!] Ошибка: Неверно указан номер варианта.\n"; continue; }
 
-                vector<double> penalties;
-                double p;
-                while (iss >> p) penalties.push_back(p);
+                cout << "\n--- НАСТРОЙКА ШТРАФНЫХ ПРОМЕЖУТКОВ ---\n";
+                cout << "Для каждого из " << tp.m << " поставщиков введите его условия.\n";
+                cout << "[!] Подсказка: Если лимит бесконечный (весь остаток), введите большое число (например, 1000).\n";
+                
+                vector<vector<PenaltyTier>> supplier_tiers(tp.m);
 
-                if ((int)penalties.size() != tp.m) {
-                    cout << "[!] Ошибка: Количество штрафов (" << penalties.size() << ") должно совпадать с m=" << tp.m << ".\n";
-                    continue;
+                for (int i = 0; i < tp.m; ++i) {
+                    int tiers_count = 0;
+                    cout << "\nПоставщик " << i + 1 << ": сколько тарифных промежутков? (0 если нет): ";
+                    while (!(cin >> tiers_count) || tiers_count < 0) {
+                        cout << "Ошибка! Введите целое неотрицательное число: ";
+                        cin.clear();
+                        cin.ignore(10000, '\n');
+                    }
+
+                    for (int j = 0; j < tiers_count; ++j) {
+                        double cap, pen;
+                        cout << "  Промежуток " << j + 1 << " [Вместимость Штраф]: ";
+                        while (!(cin >> cap >> pen) || cap < 0 || pen < 0) {
+                            cout << "  Ошибка! Введите два неотрицательных числа через пробел: ";
+                            cin.clear();
+                            cin.ignore(10000, '\n');
+                        }
+                        supplier_tiers[i].push_back({cap, pen});
+                    }
                 }
 
-                tp.convertToOpenWithPenalties(variant_num, penalties);
-                cout << "[+] Задача преобразована в открытую (добавлен фиктивный потребитель и штрафы).\n";
+                cin.ignore(10000, '\n');
+
+                tp.convertToOpenWithPenalties(variant_num, supplier_tiers);
+                cout << "\n[+] Задача успешно преобразована в открытую с учетом штрафов и запретов!\n";
             } else {
-                cout << "[!] Ошибка: Укажите номер варианта и вектор штрафов.\n";
+                cout << "[!] Ошибка: Укажите номер варианта. Формат: make_open <var>\n";
             }
         }
         else {

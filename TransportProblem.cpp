@@ -1,6 +1,7 @@
 #include "TransportProblem.h"
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
 #include <limits>
 
 using namespace std;
@@ -130,7 +131,7 @@ bool TransportProblem::findCycleIterative(int start_r, int start_c, bool startHo
 
         bool foundNext = false;
         int max_iter = isHoriz ? n : m;
-        
+        cout << "(" << r << "," << c << ") -> ";
         while (curr.iter < max_iter) {
             int next_idx = curr.iter++;
             int nr = isHoriz ? r : next_idx;
@@ -141,6 +142,7 @@ bool TransportProblem::findCycleIterative(int start_r, int start_c, bool startHo
             if (plan[nr][nc].isBasic || (nr == start_r && nc == start_c)) {
                 if (nr == start_r && nc == start_c && path.size() >= 4) {
                     path.push_back({nr, nc});
+                    cout << "\n";
                     return true;
                 }
                 
@@ -160,6 +162,7 @@ bool TransportProblem::findCycleIterative(int start_r, int start_c, bool startHo
             st.pop_back();
         }
     }
+    cout << "\n";
     return false;
 }
 
@@ -428,29 +431,102 @@ bool TransportProblem::solveSimplex(double eps, int print_k) {
     return true;
 }
 
-void TransportProblem::convertToOpenWithPenalties(int variant_number, const vector<double>& penalties) {
+void TransportProblem::convertToOpenWithPenalties(int variant_number, const vector<vector<PenaltyTier>>& supplier_tiers) {
     using namespace std;
     
+    double max_cost = 0.0;
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (C[i][j] != -1 && C[i][j] > max_cost) {
+                max_cost = C[i][j];
+            }
+        }
+    }
+
+    double INF = (max_cost == 0.0) ? 1000.0 : max_cost * 10.0; 
+
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (C[i][j] == -1) {
+                C[i][j] = INF;
+            }
+        }
+    }
+
     double rem = variant_number;
     for (int j = n - 1; j >= 0 && rem > 0; --j) {
-        if (B[j] >= rem) {
-            B[j] -= rem;
-            rem = 0;
-        } else {
-            rem -= B[j];
-            B[j] = 0;
-        }
+        if (B[j] >= rem) { B[j] -= rem; rem = 0; } 
+        else { rem -= B[j]; B[j] = 0; }
     }
     
     double sumA = 0, sumB = 0;
     for (double sup : A) sumA += sup;
     for (double dem : B) sumB += dem;
 
-    B.push_back(sumA - sumB); 
-    n++;
+    double excess = sumA - sumB;
 
-    for (int i = 0; i < m; ++i) {
-        C[i].push_back(penalties[i]); 
+    if (excess < -1e-9) {
+        double deficit = sumB - sumA;
+        A.push_back(deficit); 
+        
+        vector<double> dummy_row(n, 0.0);
+        C.push_back(dummy_row);
+        m++;
+        
+        return; 
+    }
+
+    if (abs(excess) <= 1e-9) return;
+
+    int original_m = m;
+    int original_n = n;
+    double total_dummy_capacity = 0.0;
+
+    for (int i = 0; i < original_m; ++i) {
+        if (i >= supplier_tiers.size()) continue; 
+
+        for (const auto& tier : supplier_tiers[i]) {
+            double cap = min(tier.capacity, excess); 
+            if (cap <= 1e-9) continue;
+
+            B.push_back(cap);
+            total_dummy_capacity += cap;
+            n++;
+
+            for (int k = 0; k < original_m; ++k) {
+                if (k == i) {
+                    C[k].push_back(tier.penalty); 
+                } else {
+                    C[k].push_back(INF);         
+                }
+            }
+        }
+    }
+
+    if (total_dummy_capacity > excess + 1e-9) {
+        A.push_back(total_dummy_capacity - excess);
+        
+        vector<double> dummy_row(n, 0.0);
+        for (int j = 0; j < n; ++j) {
+            if (j < original_n) {
+                dummy_row[j] = INF; 
+            } else {
+                dummy_row[j] = 0.0;
+            }
+        }
+        C.push_back(dummy_row);
+        m++;
+    }
+    else if (total_dummy_capacity < excess - 1e-9) {
+        B.push_back(excess - total_dummy_capacity);
+        n++;
+        for (int i = 0; i < original_m; ++i) {
+            if (i < supplier_tiers.size() && !supplier_tiers[i].empty()) {
+                C[i].push_back(INF);
+            } else {
+                C[i].push_back(0.0);
+            }
+        }
     }
 }
 

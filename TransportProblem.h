@@ -9,6 +9,11 @@ struct TransportCell {
     bool isBasic = false;
 };
 
+struct PenaltyTier {
+    double capacity; 
+    double penalty; 
+};
+
 class TransportProblem {
 public:
     int m;
@@ -36,7 +41,7 @@ public:
     
     
     
-    void convertToOpenWithPenalties(int variant_number, const std::vector<double>& penalties);
+    void convertToOpenWithPenalties(int variant_number, const std::vector<std::vector<PenaltyTier>>& supplier_tiers);
 
 private:
     void buildNorthWestCorner();
