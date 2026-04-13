@@ -304,7 +304,7 @@ int main() {
         else if (command == "load_variant") {
             a = -2.0;
             b = -1.0;
-            m = 100;
+            m = 10;
             eps = 0.1;
             N = 5;
             current_expr_str = "exp(x) - x^3 / 3 + 2*x";
@@ -315,6 +315,7 @@ int main() {
                 cout << "    Интервал: [" << a << ", " << b << "]\n";
                 cout << "    Точность: " << eps << "\n";
                 cout << "    m:        " << m << "\n";
+                cout << "    N:        " << N << "\n";
                 cout << "    Функция:  f(x) = " << current_expr_str << "\n";
             } catch (const std::exception& e) {
                 cout << "[!] Ошибка синтаксиса при загрузке варианта: " << e.what() << "\n";
