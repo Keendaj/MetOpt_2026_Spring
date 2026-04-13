@@ -1,45 +1,214 @@
 #include <iostream>
 #include <sstream>
-#include <limits>
 #include <string>
+#include <functional>
+#include <cmath>
+#include <iomanip>
 #include <vector>
 #include <map>
-#include <iomanip>
-#include "TransportProblem.h"
+#include <fstream>
+#include "Minimize.h" 
+#include "MathParser.h" 
 
 using std::cout;
 using std::cin;
 using std::string;
-using std::vector;
-using std::map;
-using std::endl;
-using std::setw;
 using std::istringstream;
+using std::function;
+using std::map;
+using std::vector;
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
+void exportFibonacciPlotSVG(const function<double(double)>& func, double a, double b) {
+    std::vector<double> eps_vals = {0.1, 0.01, 0.001};
+    std::vector<string> eps_labels = {"10^-1 (0.1)", "10^-2 (0.01)", "10^-3 (0.001)"};
+    
+    std::vector<int> calls_n5;
+    std::vector<int> calls_n25;
+    
+    int max_calls = 0;
+
+    for (double eps : eps_vals) {
+        SearchStats st;
+        fibonacciSearch(func, a, b, eps, 5, true, &st);
+        calls_n5.push_back(st.calls);
+        if (st.calls > max_calls) max_calls = st.calls;
+        
+        fibonacciSearch(func, a, b, eps, 25, true, &st);
+        calls_n25.push_back(st.calls);
+        if (st.calls > max_calls) max_calls = st.calls;
+    }
+
+    max_calls = (max_calls / 10 + 1) * 10; 
+
+    std::ofstream out("fibonacci_plot.svg");
+    if (!out.is_open()) {
+        cout << "[!] Ошибка создания файла.\n";
+        return;
+    }
+
+    int width = 700, height = 500;
+    int padX = 80, padY = 60;
+    
+    out << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\">\n";
+    out << "  <rect width=\"100%\" height=\"100%\" fill=\"#fdfdfd\"/>\n"; // Белый фон
+    
+    out << "  <line x1=\"" << padX << "\" y1=\"" << padY << "\" x2=\"" << padX << "\" y2=\"" << height - padY << "\" stroke=\"black\" stroke-width=\"2\"/>\n";
+    out << "  <line x1=\"" << padX << "\" y1=\"" << height - padY << "\" x2=\"" << width - padX + 20 << "\" y2=\"" << height - padY << "\" stroke=\"black\" stroke-width=\"2\"/>\n";
+    
+    for (int i = 0; i <= max_calls; i += 10) {
+        double y = height - padY - (double)i / max_calls * (height - 2 * padY);
+        out << "  <line x1=\"" << padX - 5 << "\" y1=\"" << y << "\" x2=\"" << width - padX << "\" y2=\"" << y << "\" stroke=\"#e0e0e0\" stroke-width=\"1\"/>\n";
+        out << "  <text x=\"" << padX - 15 << "\" y=\"" << y + 5 << "\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"end\">" << i << "</text>\n";
+    }
+    
+    for (size_t i = 0; i < eps_vals.size(); ++i) {
+        double x = padX + (double)i / (eps_vals.size() - 1) * (width - 2 * padX);
+        out << "  <line x1=\"" << x << "\" y1=\"" << height - padY << "\" x2=\"" << x << "\" y2=\"" << height - padY + 5 << "\" stroke=\"black\" stroke-width=\"2\"/>\n";
+        out << "  <text x=\"" << x << "\" y=\"" << height - padY + 25 << "\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\">" << eps_labels[i] << "</text>\n";
+    }
+
+    out << "  <polyline fill=\"none\" stroke=\"#e74c3c\" stroke-width=\"3\" points=\"";
+    for (size_t i = 0; i < eps_vals.size(); ++i) {
+        double x = padX + (double)i / (eps_vals.size() - 1) * (width - 2 * padX);
+        double y = height - padY - (double)calls_n5[i] / max_calls * (height - 2 * padY);
+        out << x << "," << y << " ";
+    }
+    out << "\"/>\n";
+
+    out << "  <polyline fill=\"none\" stroke=\"#3498db\" stroke-width=\"3\" points=\"";
+    for (size_t i = 0; i < eps_vals.size(); ++i) {
+        double x = padX + (double)i / (eps_vals.size() - 1) * (width - 2 * padX);
+        double y = height - padY - (double)calls_n25[i] / max_calls * (height - 2 * padY);
+        out << x << "," << y << " ";
+    }
+    out << "\"/>\n";
+
+    for (size_t i = 0; i < eps_vals.size(); ++i) {
+        double x = padX + (double)i / (eps_vals.size() - 1) * (width - 2 * padX);
+        
+        double y5 = height - padY - (double)calls_n5[i] / max_calls * (height - 2 * padY);
+        out << "  <circle cx=\"" << x << "\" cy=\"" << y5 << "\" r=\"5\" fill=\"#e74c3c\"/>\n";
+        out << "  <text x=\"" << x << "\" y=\"" << y5 - 12 << "\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"14\" fill=\"#c0392b\" text-anchor=\"middle\">" << calls_n5[i] << "</text>\n";
+        
+        double y25 = height - padY - (double)calls_n25[i] / max_calls * (height - 2 * padY);
+        out << "  <circle cx=\"" << x << "\" cy=\"" << y25 << "\" r=\"5\" fill=\"#3498db\"/>\n";
+        out << "  <text x=\"" << x << "\" y=\"" << y25 + 22 << "\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"14\" fill=\"#2980b9\" text-anchor=\"middle\">" << calls_n25[i] << "</text>\n";
+    }
+    out << "  <text x=\"" << width/2 << "\" y=\"" << 30 << "\" font-family=\"Arial\" font-size=\"18\" font-weight=\"bold\" text-anchor=\"middle\">Зависимость числа вычислений от требуемой точности</text>\n";
+    out << "  <text x=\"" << width/2 << "\" y=\"" << height - 10 << "\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\">Точность (eps)</text>\n";
+    out << "  <text x=\"" << 25 << "\" y=\"" << height/2 << "\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\" transform=\"rotate(-90 25," << height/2 << ")\">Вызовы функции f(x)</text>\n";
+
+    out << "  <rect x=\"" << width - 150 << "\" y=\"" << 50 << "\" width=\"120\" height=\"60\" fill=\"white\" stroke=\"black\"/>\n";
+    out << "  <line x1=\"" << width - 140 << "\" y1=\"" << 65 << "\" x2=\"" << width - 110 << "\" y2=\"" << 65 << "\" stroke=\"#e74c3c\" stroke-width=\"3\"/>\n";
+    out << "  <text x=\"" << width - 100 << "\" y=\"" << 70 << "\" font-family=\"Arial\" font-size=\"14\">N = 5</text>\n";
+    out << "  <line x1=\"" << width - 140 << "\" y1=\"" << 90 << "\" x2=\"" << width - 110 << "\" y2=\"" << 90 << "\" stroke=\"#3498db\" stroke-width=\"3\"/>\n";
+    out << "  <text x=\"" << width - 100 << "\" y=\"" << 95 << "\" font-family=\"Arial\" font-size=\"14\">N = 25</text>\n";
+
+    out << "</svg>\n";
+    out.close();
+}
+
+void exportToSVG(const std::function<double(double)>& f, double a, double b, const string& filename) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        cout << "[!] Не удалось создать файл " << filename << "\n";
+        return;
+    }
+
+    int width = 800; 
+    int height = 500;
+    int points = 500; 
+
+    double min_y = f(a), max_y = f(a);
+    for(int i = 0; i <= points; ++i) {
+        double x = a + i * (b - a) / points;
+        double y = f(x);
+        if(y < min_y) min_y = y;
+        if(y > max_y) max_y = y;
+    }
+
+    double pad_y = (max_y - min_y) * 0.1;
+    if (pad_y == 0) pad_y = 1.0;
+    min_y -= pad_y;
+    max_y += pad_y;
+
+    out << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\">\n";
+    out << "  \n";
+    out << "  <rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
+
+    if (min_y < 0 && max_y > 0) {
+        double zero_y = height - (0 - min_y) / (max_y - min_y) * height;
+        out << "  <line x1=\"0\" y1=\"" << zero_y << "\" x2=\"" << width << "\" y2=\"" << zero_y 
+            << "\" stroke=\"black\" stroke-width=\"1\" stroke-dasharray=\"5,5\"/>\n";
+    }
+
+    out << "  <polyline fill=\"none\" stroke=\"blue\" stroke-width=\"3\" points=\"";
+    for(int i = 0; i <= points; ++i) {
+        double x = a + i * (b - a) / points;
+        double y = f(x);
+        double px = (x - a) / (b - a) * width;
+        double py = height - (y - min_y) / (max_y - min_y) * height;
+        out << px << "," << py << " ";
+    }
+    out << "\"/>\n";
+    out << "</svg>\n";
+    out.close();
+}
+
 void printHelp() {
     cout << "\n--- Доступные команды ---\n"
-         << "help                        - Показать это меню\n"
-         << "input                       - Ввести матрицу тарифов и векторы A, B вручную\n"
-         << "load_variant33              - Загрузить данные нужного варианта\n"
-         << "print_task                  - Вывести текущие векторы A, B и матрицу C\n"
-         << "solve_potential [--print k] - Решить методом потенциалов (k - вывод каждой k-й итерации)\n"
-         << "solve_simplex [--print k]   - Решить двухфазным симплекс-методом (k - вывод каждой k-й итерации)\n"
-         << "print_potential             - Вывести результат метода потенциалов\n"
-         << "print_simplex               - Вывести результат симплекс-метода\n"
-         << "make_open <var>             - Преобразовать в открытую задачу (var - номер варианта). Штрафы вводятся интерактивно.\n"
-         << "\n--- История и редактирование ---\n"
-         << "save <name>                 - Сохранить текущую задачу в историю\n"
-         << "load <name>                 - Загрузить задачу из истории\n"
-         << "history                     - Показать список сохраненных задач\n"
-         << "edit_a <a1> <a2> ...        - Изменить вектор запасов A\n"
-         << "edit_b <b1> <b2> ...        - Изменить вектор потребностей B\n"
-         << "edit_c <row> <col> <val>    - Изменить элемент матрицы тарифов C (индексы от 1)\n"
-         << "exit                        - Выход\n"
+         << "help                     - Показать это меню\n"
+         << "help_expr                - Показать как вводить функции\n"
+         << "status                   - Показать текущие параметры\n"
+         << "load_variant             - Загрузить исходные данные варианта ([-2, -1], m=100, eps=0.1)\n"
+         << "set_bounds <a> <b>       - Задать границы интервала поиска (например: set_bounds 0 10)\n"
+         << "set_eps <eps>            - Задать точность (например: set_eps 0.0001)\n"
+            << "set_m <m>             - Задать количество разбиений сетки (для равномерного, m >= 2)\n"
+         << "set_n <N>                - Задать N чисел Фибоначчи (для метода Фибоначчи, N >= 4)\n"
+         << "set_expr <формула>       - Задать функцию строкой (например: set_expr x^2 - 3*sin(x))\n"
+         << "solve_uni [--silent]     - Решить методом РАВНОМЕРНОГО поиска\n"
+         << "solve_fib [--silent]     - Решить методом ФИБОНАЧЧИ с возвратом\n"
+         << "table                    - Печать исследовательской таблицы\n"
+         << "plot              - Отрисовка графика функции\n"
+         << "plot_fib                 - Создать график зависимости вычислений от eps\n"
+         << "\n--- История функций ---\n"
+         << "save <name>              - Сохранить текущую функцию в историю\n"
+         << "load <name>              - Загрузить функцию из истории\n"
+         << "history                  - Показать список сохраненных функций\n"
+         << "exit                     - Выход\n"
          << "-------------------------\n";
+}
+
+void printExprHelp() {
+    std::cout << "\n--- Справка по вводу формул (команда set_expr) ---\n"
+              << "Формулы вводятся в виде обычной строки. Пробелы игнорируются.\n\n"
+              << "[ Переменная ]\n"
+              << "  В формуле должна использоваться только английская буква 'x' или 'X'.\n\n"
+              << "[ Базовые операции ]\n"
+              << "  +   Сложение         (x + 5)\n"
+              << "  -   Вычитание        (x - 5)\n"
+              << "  * Умножение        (3 * x)\n"
+              << "  /   Деление          (x / 2)\n"
+              << "  ^   Возведение в ст. (x ^ 2)\n\n"
+              << "[ Поддерживаемые функции ]\n"
+              << "  sin(x)  - Синус\n"
+              << "  cos(x)  - Косинус\n"
+              << "  tan(x)  - Тангенс\n"
+              << "  exp(x)  - Экспонента (e^x)\n"
+              << "  log(x)  - Натуральный логарифм (ln x)\n"
+              << "  sqrt(x) - Квадратный корень\n\n"
+              << "[ Приоритет и скобки ]\n"
+              << "  Для управления порядком действий используйте круглые скобки ().\n"
+              << "  Пример: 5 * (x - 3)^2 + sin(x/2)\n\n"
+              << "[ Примеры команд ]\n"
+              << "  set_expr x^2 - 4*x + 4\n"
+              << "  set_expr -sin(x) + cos(2*x)\n"
+              << "  set_expr exp(-x) * sqrt(x)\n"
+              << "--------------------------------------------------\n";
 }
 
 int main() {
@@ -48,14 +217,26 @@ int main() {
     SetConsoleOutputCP(CP_UTF8);
     #endif
 
-    TransportProblem tp;
-    map<string, TransportProblem> history;
-    bool dataLoaded = false;
+    double a = 0.0;
+    double b = 10.0;
+    double eps = 1e-4;
+    int m = 10;
+    int N = 10;
+    
+    MathParser parser; 
+    string current_expr_str = "(x - 3.14)^2 + 2.5"; 
+    
+    map<string, string> func_history;
 
-    cout << "Программа для решения транспортной задачи запущена. Введите 'help' для списка команд.\n";
+    function<double(double)> current_func = [&parser, &current_expr_str](double x) {
+        return parser.evaluate(current_expr_str, x);
+    };
+
+    cout << "Программа одномерной оптимизации (метод равномерного поиска) запущена.\n";
+    cout << "Введите 'help' для списка команд.\n";
 
     while (true) {
-        cout << "\n[Transport] > ";
+        cout << "\n[Optimize] > ";
         
         string line;
         if (!getline(cin, line)) break; 
@@ -70,228 +251,250 @@ int main() {
         }
         else if (command == "help") {
             printHelp();
-        } 
-        else if (command == "input") {
-            tp.input();
-            dataLoaded = true;
-            cout << "[+] Данные успешно загружены.\n";
-        } 
-        else if (command == "load_variant33") {
-            vector<double> A = {21, 19, 23, 13};
-            vector<double> B = {5, 13, 4, 22, 32};
-            vector<vector<double>> C = {
-                {9, 2, 21, 10, 6},
-                {8, 3, 19, 9, 12},
-                {11, 8, 11, 4, 2},
-                {2, 8, 7, 6, 1}
-            };
-            tp.setData(A, B, C);
-            dataLoaded = true;
-            cout << "[+] Загружен вариант 33 (сбалансированная задача 4x5).\n";
         }
-        else if (command == "print_task") {
-            if (!dataLoaded) {
-                cout << "[!] Ошибка: Нет активных данных.\n";
-                continue;
+        else if (command == "help_expr") {
+            printExprHelp();
+        }
+        else if (command == "status") {
+            cout << "--- Текущие настройки ---\n";
+            cout << "Интервал поиска: [" << a << ", " << b << "]\n";
+            cout << "Точность (eps):  " << eps << "\n";
+            cout << "Разбиений (m):   " << m << " (Для равномерного)\n";
+            cout << "Длина последовательности Фибоначчи (N):  " << N << " (Для Фибоначчи)\n";
+            cout << "Функция f(x)  =  " << current_expr_str << "\n";
+            cout << "-------------------------\n";
+        }
+        else if (command == "load_variant") {
+            a = -2.0;
+            b = -1.0;
+            m = 100;
+            eps = 0.1;
+            N = 5;
+            current_expr_str = "exp(x) - x^3 / 3 + 2*x";
+            
+            try {
+                parser.evaluate(current_expr_str, 0.0);
+                cout << "[+] Данные варианта успешно загружены!\n";
+                cout << "    Интервал: [" << a << ", " << b << "]\n";
+                cout << "    Точность: " << eps << "\n";
+                cout << "    m:        " << m << "\n";
+                cout << "    Функция:  f(x) = " << current_expr_str << "\n";
+            } catch (const std::exception& e) {
+                cout << "[!] Ошибка синтаксиса при загрузке варианта: " << e.what() << "\n";
             }
-            cout << "Вектор запасов A (m=" << tp.m << "): ";
-            for (double a : tp.A) cout << a << " ";
-            cout << "\nВектор потребностей B (n=" << tp.n << "): ";
-            for (double b : tp.B) cout << b << " ";
-            cout << "\nМатрица тарифов C:\n";
-            for (int i = 0; i < tp.m; ++i) {
-                for (int j = 0; j < tp.n; ++j) {
-                    cout << setw(6) << tp.C[i][j];
+        }
+        else if (command == "set_bounds") {
+            double new_a, new_b;
+            if (iss >> new_a >> new_b) {
+                if (new_a < new_b) {
+                    a = new_a;
+                    b = new_b;
+                    cout << "[+] Границы успешно обновлены: [" << a << ", " << b << "]\n";
+                } else {
+                    cout << "[!] Ошибка: левая граница 'a' должна быть меньше правой 'b'.\n";
                 }
-                cout << "\n";
+            } else {
+                cout << "[!] Ошибка: Формат команды 'set_bounds <a> <b>'.\n";
+            }
+        }
+        else if (command == "set_n") {
+            int new_n;
+            if (iss >> new_n) {
+                if (new_n >= 4) {
+                    N = new_n;
+                    cout << "[+] Число N обновлено: N = " << N << "\n";
+                } else {
+                    cout << "[!] Ошибка: N должно быть не меньше 4.\n";
+                }
+            } else {
+                cout << "[!] Ошибка: Формат команды 'set_n <N>'.\n";
+            }
+        }
+        else if (command == "set_eps") {
+            double new_eps;
+            if (iss >> new_eps) {
+                if (new_eps > 0) {
+                    eps = new_eps;
+                    cout << "[+] Точность обновлена: eps = " << eps << "\n";
+                } else {
+                    cout << "[!] Ошибка: Точность должна быть строго больше 0.\n";
+                }
+            } else {
+                cout << "[!] Ошибка: Формат команды 'set_eps <eps>'.\n";
+            }
+        }
+        else if (command == "set_m") {
+            int new_m;
+            if (iss >> new_m) {
+                if (new_m >= 2) {
+                    m = new_m;
+                    cout << "[+] Число разбиений обновлено: m = " << m << "\n";
+                } else {
+                    cout << "[!] Ошибка: m должно быть не меньше 2.\n";
+                }
+            } else {
+                cout << "[!] Ошибка: Формат команды 'set_m <m>'.\n";
+            }
+        }
+        else if (command == "set_expr") {
+            string expr;
+            if (getline(iss, expr)) {
+                expr.erase(0, expr.find_first_not_of(" \t")); 
+                if (!expr.empty()) {
+                    try {
+                        parser.evaluate(expr, 0.0); 
+                        current_expr_str = expr;
+                        std::cout << "[+] Успешно! Новая функция: f(x) = " << current_expr_str << "\n";
+                    } catch (const std::exception& e) {
+                        std::cout << "[!] Ошибка синтаксиса: " << e.what() << "\n";
+                        std::cout << "[i] Введите 'help_expr', чтобы посмотреть правила ввода формул.\n"; 
+                    }
+                } else {
+                    std::cout << "[!] Ошибка: Формула не может быть пустой.\n";
+                }
+            } else {
+                std::cout << "[!] Ошибка: Формат команды 'set_expr <формула>'.\n";
             }
         }
         else if (command == "save") {
             string name;
             if (iss >> name) {
-                if (!dataLoaded) {
-                    cout << "[!] Ошибка: Нет данных для сохранения.\n";
-                } else {
-                    history[name] = tp;
-                    cout << "[+] Текущая задача сохранена под именем '" << name << "'.\n";
-                }
+                func_history[name] = current_expr_str;
+                cout << "[+] Текущая функция сохранена под именем '" << name << "'.\n";
             } else {
-                cout << "[!] Ошибка: Укажите имя для сохранения.\n";
+                cout << "[!] Ошибка: Укажите имя для сохранения. (Например: save my_func)\n";
             }
         }
         else if (command == "load") {
             string name;
             if (iss >> name) {
-                if (history.count(name)) {
-                    tp = history[name];
-                    dataLoaded = true;
-                    cout << "[+] Задача '" << name << "' успешно загружена.\n";
+                if (func_history.count(name)) {
+                    current_expr_str = func_history[name];
+                    cout << "[+] Функция '" << name << "' успешно загружена: f(x) = " << current_expr_str << "\n";
                 } else {
-                    cout << "[!] Ошибка: Сохранение с именем '" << name << "' не найдено.\n";
+                    cout << "[!] Ошибка: Функция с именем '" << name << "' не найдена в истории.\n";
                 }
             } else {
-                cout << "[!] Ошибка: Укажите имя для загрузки.\n";
+                cout << "[!] Ошибка: Укажите имя для загрузки. (Например: load my_func)\n";
             }
         }
         else if (command == "history") {
-            cout << "Сохраненные задачи:\n";
-            if (history.empty()) cout << "  (пусто)\n";
-            for (const auto& pair : history) {
-                cout << "  - " << pair.first << " (m=" << pair.second.m << ", n=" << pair.second.n << ")\n";
-            }
-        }
-        else if (command == "edit_a") {
-            vector<double> newA;
-            double val;
-            while (iss >> val) newA.push_back(val);
-            
-            if (newA.empty()) {
-                cout << "[!] Ошибка: Введите новые значения вектора A через пробел.\n";
+            cout << "--- Сохраненные функции ---\n";
+            if (func_history.empty()) {
+                cout << "  (пусто)\n";
             } else {
-                tp.A = newA;
-                tp.m = newA.size();
-                tp.C.resize(tp.m, vector<double>(tp.n, 0.0));
-                dataLoaded = true;
-                cout << "[+] Вектор A обновлен. Текущий размер m = " << tp.m << ".\n";
-            }
-        }
-        else if (command == "edit_b") {
-            vector<double> newB;
-            double val;
-            while (iss >> val) newB.push_back(val);
-            
-            if (newB.empty()) {
-                cout << "[!] Ошибка: Введите новые значения вектора B через пробел.\n";
-            } else {
-                tp.B = newB;
-                tp.n = newB.size();
-                for (int i = 0; i < tp.m; ++i) {
-                    tp.C[i].resize(tp.n, 0.0);
-                }
-                dataLoaded = true;
-                cout << "[+] Вектор B обновлен. Текущий размер n = " << tp.n << ".\n";
-            }
-        }
-        else if (command == "edit_c") {
-            int r, c;
-            double val;
-            if (iss >> r >> c >> val) {
-                if (r >= 1 && r <= tp.m && c >= 1 && c <= tp.n) {
-                    tp.C[r-1][c-1] = val;
-                    cout << "[+] Элемент C[" << r << "][" << c << "] успешно изменен на " << val << ".\n";
-                } else {
-                    cout << "[!] Ошибка: Индексы выходят за границы. Ожидается строка (1.." << tp.m << ") и столбец (1.." << tp.n << ").\n";
-                }
-            } else {
-                cout << "[!] Ошибка: Формат команды 'edit_c <строка> <столбец> <значение>'.\n";
-            }
-        }
-        else if (command == "print_potential") {
-            if (!dataLoaded) cout << "[!] Ошибка: Нет активных данных.\n";
-            else tp.printPotentialPlan();
-        }
-        else if (command == "print_simplex") {
-            if (!dataLoaded) cout << "[!] Ошибка: Нет активных данных.\n";
-            else tp.printSimplexPlan();
-        }
-        else if (command == "solve_potential") {
-            if (!dataLoaded) {
-                cout << "[!] Ошибка: Сначала загрузите данные.\n";
-                continue;
-            }
-
-            string arg1;
-            int step = 0;
-            if (iss >> arg1 && arg1 == "--print") {
-                string stepStr;
-                if (iss >> stepStr) {
-                    try { step = std::stoi(stepStr); } 
-                    catch (...) { cout << "[!] Ошибка: Неверный формат шага.\n"; continue; }
+                for (const auto& pair : func_history) {
+                    cout << "  - " << pair.first << ": f(x) = " << pair.second << "\n";
                 }
             }
-
-            cout << "[*] Запуск метода потенциалов...\n";
-            if (tp.solvePotential(step)) {
-                cout << "\n[+] Решение найдено успешно!\n";
-                tp.printPotentialPlan(); 
-            } else {
-                cout << "[!] Метод не смог найти оптимальное решение.\n";
-            }
-        } 
-        else if (command == "solve_simplex") {
-            if (!dataLoaded) {
-                cout << "[!] Ошибка: Сначала загрузите данные.\n";
-                continue;
-            }
-
-            string arg1;
-            int step = 0;
-            if (iss >> arg1 && arg1 == "--print") {
-                string stepStr;
-                if (iss >> stepStr) {
-                    try { step = std::stoi(stepStr); } 
-                    catch (...) { cout << "[!] Ошибка: Неверный формат шага.\n"; continue; }
-                }
-            }
-
-            cout << "[*] Запуск двухфазного симплекс-метода...\n";
-            if (tp.solveSimplex(1e-7, step)) {
-                cout << "\n[+] Решение найдено успешно!\n";
-                tp.printSimplexPlan();
-            } else {
-                cout << "[!] Симплекс-метод не смог найти решение.\n";
-            }
+            cout << "---------------------------\n";
         }
-        else if (command == "make_open") {
-            if (!dataLoaded) {
-                cout << "[!] Ошибка: Сначала загрузите исходные данные закрытой задачи.\n";
-                continue;
+        else if (command == "solve_uni") {
+            cout << "[*] Запуск метода равномерного поиска...\n\n";
+            bool silent_mode = false;
+            string arg;
+            if (iss >> arg && arg == "--silent") {
+                silent_mode = true;
             }
-
-            string varStr;
-            if (iss >> varStr) {
-                int variant_num;
-                try { variant_num = std::stoi(varStr); } 
-                catch (...) { cout << "[!] Ошибка: Неверно указан номер варианта.\n"; continue; }
-
-                cout << "\n--- НАСТРОЙКА ШТРАФНЫХ ПРОМЕЖУТКОВ ---\n";
-                cout << "Для каждого из " << tp.m << " поставщиков введите его условия.\n";
-                cout << "[!] Подсказка: Если лимит бесконечный (весь остаток), введите большое число (например, 1000).\n";
+            try {
+                double min_x = uniformSearch(current_func, a, b, eps, m, silent_mode);
                 
-                vector<vector<PenaltyTier>> supplier_tiers(tp.m);
-
-                for (int i = 0; i < tp.m; ++i) {
-                    int tiers_count = 0;
-                    cout << "\nПоставщик " << i + 1 << ": сколько тарифных промежутков? (0 если нет): ";
-                    while (!(cin >> tiers_count) || tiers_count < 0) {
-                        cout << "Ошибка! Введите целое неотрицательное число: ";
-                        cin.clear();
-                        cin.ignore(10000, '\n');
-                    }
-
-                    for (int j = 0; j < tiers_count; ++j) {
-                        double cap, pen;
-                        cout << "  Промежуток " << j + 1 << " [Вместимость Штраф]: ";
-                        while (!(cin >> cap >> pen) || cap < 0 || pen < 0) {
-                            cout << "  Ошибка! Введите два неотрицательных числа через пробел: ";
-                            cin.clear();
-                            cin.ignore(10000, '\n');
-                        }
-                        supplier_tiers[i].push_back({cap, pen});
-                    }
-                }
-
-                cin.ignore(10000, '\n');
-
-                tp.convertToOpenWithPenalties(variant_num, supplier_tiers);
-                cout << "\n[+] Задача успешно преобразована в открытую с учетом штрафов и запретов!\n";
-            } else {
-                cout << "[!] Ошибка: Укажите номер варианта. Формат: make_open <var>\n";
+                cout << "\n[+] Решение найдено!\n";
+                cout << std::fixed << std::setprecision(5);
+                cout << "Приближенная точка минимума: x* = " << min_x << "\n";
+                cout << "Значение функции в точке: f(x*) = " << current_func(min_x) << "\n";
+            } catch (const std::exception& e) {
+                cout << "[!] Ошибка во время вычисления функции: " << e.what() << "\n";
             }
+        }
+        else if (command == "solve_fib") {
+            bool silent_mode = false;
+            string arg;
+            if (iss >> arg && arg == "--silent") {
+                silent_mode = true;
+            }
+
+            if (!silent_mode) cout << "[*] Запуск метода Фибоначчи с возвратом...\n\n";
+            else cout << "[*] Вычисление в тихом режиме (Фибоначчи)...\n";
+            
+            try {
+                double min_x = fibonacciSearch(current_func, a, b, eps, N, silent_mode);
+                
+                if (!silent_mode) cout << "\n";
+                cout << "[+] Решение найдено!\n";
+                cout << std::fixed << std::setprecision(5);
+                cout << "Приближенная точка минимума: x* = " << min_x << "\n";
+                cout << "Значение функции в точке: f(x*) = " << current_func(min_x) << "\n";
+            } catch (const std::exception& e) {
+                cout << "[!] Ошибка во время вычисления функции: " << e.what() << "\n";
+            }
+        }
+        else if (command == "table") {
+            cout << "\n=========================================================================\n";
+            cout << "Метод               | Параметр | eps    | K_теор | K_факт | Итер/циклы \n";
+            cout << "--------------------+----------+--------+--------+--------+----------------\n";
+            
+            vector<double> eps_vals = {1e-1, 1e-2, 1e-3};
+            
+            for (size_t i = 0; i < eps_vals.size(); ++i) {
+                SearchStats st;
+                uniformSearch(current_func, a, b, eps_vals[i], 10, true, &st);
+                
+                if (i == 0) cout << std::left << std::setw(20) << "Равномерный поиск" << "| m = 10   | ";
+                else cout << std::left << std::setw(20) << "" << "|          | ";
+                
+                cout << "10^-" << (i+1) << " | " 
+                     << std::setw(6) << st.k_teor << " | " 
+                     << std::setw(6) << st.calls << " | " 
+                     << st.iters << "\n";
+            }
+            cout << "--------------------+----------+--------+--------+--------+----------------\n";
+
+            for (size_t i = 0; i < eps_vals.size(); ++i) {
+                SearchStats st;
+                fibonacciSearch(current_func, a, b, eps_vals[i], 5, true, &st);
+                
+                if (i == 0) cout << std::left << std::setw(20) << "Фибоначчи" << "| N = 5    | ";
+                else cout << std::left << std::setw(20) << "" << "|          | ";
+                
+                cout << "10^-" << (i+1) << " | " 
+                     << std::setw(6) << st.k_teor << " | " 
+                     << std::setw(6) << st.calls << " | " 
+                     << st.iters << "\n";
+            }
+            cout << "--------------------+----------+--------+--------+--------+----------------\n";
+
+            for (size_t i = 0; i < eps_vals.size(); ++i) {
+                SearchStats st;
+                fibonacciSearch(current_func, a, b, eps_vals[i], 25, true, &st);
+                
+                if (i == 0) cout << std::left << std::setw(20) << "Фибоначчи" << "| N = 25   | ";
+                else cout << std::left << std::setw(20) << "" << "|          | ";
+                
+                cout << "10^-" << (i+1) << " | " 
+                     << std::setw(6) << st.k_teor << " | " 
+                     << std::setw(6) << st.calls << " | " 
+                     << st.iters << "\n";
+            }
+            cout << "=========================================================================\n";
+        }
+        else if (command == "plot") {
+            string filename = "graph.svg";
+            exportToSVG(current_func, a, b, filename);
+            cout << "[+] График успешно сгенерирован и сохранен в файл: " << filename << "\n";
+            cout << "[i] Вы можете открыть " << filename << " в любом браузере (Chrome, Edge, Яндекс) или перетащить в Word.\n";
+        }
+        else if (command == "plot_fib") {
+            cout << "[*] Сбор данных и генерация графика...\n";
+            exportFibonacciPlotSVG(current_func, a, b);
+            cout << "[+] График успешно сгенерирован!\n";
+            cout << "[i] Файл 'fibonacci_plot.svg' сохранен в папке с программой.\n";
+            cout << "    Откройте его в браузере (Chrome, Edge) или перетащите прямо в Word-отчет.\n";
         }
         else {
-            cout << "[?] Неизвестная команда. Введите 'help'.\n";
+            cout << "[?] Неизвестная команда '" << command << "'. Введите 'help' для вызова справки.\n";
         }
     }
+
     return 0;
 }
