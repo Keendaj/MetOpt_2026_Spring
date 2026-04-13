@@ -119,8 +119,8 @@ void exportToSVG(const std::function<double(double)>& f, double a, double b, con
         return;
     }
 
-    int width = 800; 
-    int height = 500;
+    int width = 800, height = 500;
+    int padX = 80, padY = 60;
     int points = 500; 
 
     double min_y = f(a), max_y = f(a);
@@ -131,30 +131,67 @@ void exportToSVG(const std::function<double(double)>& f, double a, double b, con
         if(y > max_y) max_y = y;
     }
 
-    double pad_y = (max_y - min_y) * 0.1;
-    if (pad_y == 0) pad_y = 1.0;
-    min_y -= pad_y;
-    max_y += pad_y;
+    double y_range = max_y - min_y;
+    if (y_range == 0) y_range = 1.0;
+    min_y -= y_range * 0.1;
+    max_y += y_range * 0.1;
+
+    double x_range = b - a;
+    double min_x = a - x_range * 0.1;
+    double max_x = b + x_range * 0.1;
+
+    auto getX = [&](double x) { return padX + (x - min_x) / (max_x - min_x) * (width - 2 * padX); };
+    auto getY = [&](double y) { return height - padY - (y - min_y) / (max_y - min_y) * (height - 2 * padY); };
 
     out << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\">\n";
-    out << "  \n";
-    out << "  <rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
+    out << "  <rect width=\"100%\" height=\"100%\" fill=\"#fdfdfd\"/>\n";
 
-    if (min_y < 0 && max_y > 0) {
-        double zero_y = height - (0 - min_y) / (max_y - min_y) * height;
-        out << "  <line x1=\"0\" y1=\"" << zero_y << "\" x2=\"" << width << "\" y2=\"" << zero_y 
-            << "\" stroke=\"black\" stroke-width=\"1\" stroke-dasharray=\"5,5\"/>\n";
+    int x_ticks = 10;
+    for (int i = 0; i <= x_ticks; ++i) {
+        double val = min_x + i * (max_x - min_x) / x_ticks;
+        double px = getX(val);
+        out << "  <line x1=\"" << px << "\" y1=\"" << padY << "\" x2=\"" << px << "\" y2=\"" << height - padY << "\" stroke=\"#e0e0e0\" stroke-width=\"1\"/>\n";
+        
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.2f", val);
+        out << "  <text x=\"" << px << "\" y=\"" << height - padY + 20 << "\" font-family=\"Arial\" font-size=\"12\" text-anchor=\"middle\">" << buf << "</text>\n";
     }
+    
+    int y_ticks = 10;
+    for (int i = 0; i <= y_ticks; ++i) {
+        double val = min_y + i * (max_y - min_y) / y_ticks;
+        double py = getY(val);
+        out << "  <line x1=\"" << padX << "\" y1=\"" << py << "\" x2=\"" << width - padX << "\" y2=\"" << py << "\" stroke=\"#e0e0e0\" stroke-width=\"1\"/>\n";
+        
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.2f", val);
+        out << "  <text x=\"" << padX - 10 << "\" y=\"" << py + 4 << "\" font-family=\"Arial\" font-size=\"12\" text-anchor=\"end\">" << buf << "</text>\n";
+    }
+    double zero_x = getX(0.0);
+    double zero_y = getY(0.0);
+    
+    if (0.0 >= min_y && 0.0 <= max_y)
+        out << "  <line x1=\"" << padX << "\" y1=\"" << zero_y << "\" x2=\"" << width - padX << "\" y2=\"" << zero_y << "\" stroke=\"black\" stroke-width=\"2\"/>\n";
+    if (0.0 >= min_x && 0.0 <= max_x)
+        out << "  <line x1=\"" << zero_x << "\" y1=\"" << padY << "\" x2=\"" << zero_x << "\" y2=\"" << height - padY << "\" stroke=\"black\" stroke-width=\"2\"/>\n";
 
-    out << "  <polyline fill=\"none\" stroke=\"blue\" stroke-width=\"3\" points=\"";
+    out << "  <line x1=\"" << getX(a) << "\" y1=\"" << padY << "\" x2=\"" << getX(a) << "\" y2=\"" << height - padY << "\" stroke=\"#e74c3c\" stroke-width=\"2\" stroke-dasharray=\"5,5\"/>\n";
+    out << "  <line x1=\"" << getX(b) << "\" y1=\"" << padY << "\" x2=\"" << getX(b) << "\" y2=\"" << height - padY << "\" stroke=\"#e74c3c\" stroke-width=\"2\" stroke-dasharray=\"5,5\"/>\n";
+    out << "  <text x=\"" << getX(a) << "\" y=\"" << padY - 10 << "\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"14\" fill=\"#e74c3c\" text-anchor=\"middle\">Гран. A</text>\n";
+    out << "  <text x=\"" << getX(b) << "\" y=\"" << padY - 10 << "\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"14\" fill=\"#e74c3c\" text-anchor=\"middle\">Гран. B</text>\n";
+
+    out << "  <polyline fill=\"none\" stroke=\"#2ecc71\" stroke-width=\"3\" points=\"";
     for(int i = 0; i <= points; ++i) {
-        double x = a + i * (b - a) / points;
+        double x = min_x + i * (max_x - min_x) / points;
         double y = f(x);
-        double px = (x - a) / (b - a) * width;
-        double py = height - (y - min_y) / (max_y - min_y) * height;
-        out << px << "," << py << " ";
+        out << getX(x) << "," << getY(y) << " ";
     }
     out << "\"/>\n";
+
+    out << "  <text x=\"" << width/2 << "\" y=\"" << 30 << "\" font-family=\"Arial\" font-size=\"18\" font-weight=\"bold\" text-anchor=\"middle\">График целевой функции f(x)</text>\n";
+    out << "  <text x=\"" << width/2 << "\" y=\"" << height - 15 << "\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\">Значения X</text>\n";
+    out << "  <text x=\"" << 25 << "\" y=\"" << height/2 << "\" font-family=\"Arial\" font-size=\"14\" text-anchor=\"middle\" transform=\"rotate(-90 25," << height/2 << ")\">Значения f(x)</text>\n";
+
     out << "</svg>\n";
     out.close();
 }
@@ -431,7 +468,7 @@ int main() {
         }
         else if (command == "table") {
             cout << "\n=========================================================================\n";
-            cout << "Метод               | Параметр | eps    | K_теор | K_факт | Итер/циклы \n";
+            cout << " Метод              | Параметр | eps    | K_теор | K_факт | Итер/циклы \n";
             cout << "--------------------+----------+--------+--------+--------+----------------\n";
             
             vector<double> eps_vals = {1e-1, 1e-2, 1e-3};
@@ -439,12 +476,12 @@ int main() {
             for (size_t i = 0; i < eps_vals.size(); ++i) {
                 SearchStats st;
                 uniformSearch(current_func, a, b, eps_vals[i], 10, true, &st);
-                
-                if (i == 0) cout << std::left << std::setw(20) << "Равномерный поиск" << "| m = 10   | ";
-                else cout << std::left << std::setw(20) << "" << "|          | ";
-                
+
+                if (i == 0) cout << " Равномерный поиск  | m = 10   | ";
+                else        cout << "                    |          | ";
+
                 cout << "10^-" << (i+1) << " | " 
-                     << std::setw(6) << st.k_teor << " | " 
+                     << std::left << std::setw(6) << st.k_teor << " | " 
                      << std::setw(6) << st.calls << " | " 
                      << st.iters << "\n";
             }
@@ -454,11 +491,11 @@ int main() {
                 SearchStats st;
                 fibonacciSearch(current_func, a, b, eps_vals[i], 5, true, &st);
                 
-                if (i == 0) cout << std::left << std::setw(20) << "Фибоначчи" << "| N = 5    | ";
-                else cout << std::left << std::setw(20) << "" << "|          | ";
+                if (i == 0) cout << " Фибоначчи          | N = 5    | ";
+                else        cout << "                    |          | ";
                 
                 cout << "10^-" << (i+1) << " | " 
-                     << std::setw(6) << st.k_teor << " | " 
+                     << std::left << std::setw(6) << st.k_teor << " | " 
                      << std::setw(6) << st.calls << " | " 
                      << st.iters << "\n";
             }
@@ -468,11 +505,11 @@ int main() {
                 SearchStats st;
                 fibonacciSearch(current_func, a, b, eps_vals[i], 25, true, &st);
                 
-                if (i == 0) cout << std::left << std::setw(20) << "Фибоначчи" << "| N = 25   | ";
-                else cout << std::left << std::setw(20) << "" << "|          | ";
+                if (i == 0) cout << " Фибоначчи          | N = 25   | ";
+                else        cout << "                    |          | ";
                 
                 cout << "10^-" << (i+1) << " | " 
-                     << std::setw(6) << st.k_teor << " | " 
+                     << std::left << std::setw(6) << st.k_teor << " | " 
                      << std::setw(6) << st.calls << " | " 
                      << st.iters << "\n";
             }
