@@ -26,14 +26,35 @@ class ObjectiveFunction(ABC):
     def hessian(self, x: np.ndarray) -> np.ndarray:
         return np.array(self._hessian_lambda(x), dtype=float)
 
-    def is_strictly_convex(self, x: np.ndarray) -> bool:
+    def is_strictly_convex(self, x: np.ndarray, verbose: bool = False) -> bool:
         H = self.hessian(x)
         n = H.shape[0]
+        is_convex = True
+        
+        if verbose:
+            print(f"Матрица Гессе (Гессиан) в точке {x}:")
+            for row in H:
+                print("  [" + "  ".join([f"{val:>8.4f}" for val in row]) + "]")
+                
         for i in range(1, n + 1):
             minor = H[:i, :i]
-            if np.linalg.det(minor) <= 0:
-                return False
-        return True
+            det = np.linalg.det(minor)
+            
+            if verbose:
+                print(f"  Δ{i} (угловой минор {i}-го порядка) = {det:.4f}")
+                
+            if det <= 0:
+                is_convex = False
+                
+        if verbose:
+            if is_convex:
+                print("[+] Все Δ > 0. Критерий Сильвестра ВЫПОЛНЕН.")
+                print("[+] Функция строго выпукла. Условия применимости соблюдены.")
+            else:
+                print("[-] ВНИМАНИЕ: Не все Δ > 0. Критерий Сильвестра НЕ выполнен.")
+                print("[-] Функция не является строго выпуклой в этой точке. Методы могут не сойтись.")
+                
+        return is_convex
 
 
 class TestFunction2D(ObjectiveFunction):

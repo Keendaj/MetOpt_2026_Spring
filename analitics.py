@@ -83,19 +83,28 @@ class InteractiveVisualizer2D:
         plt.show()
 
 
-class Logger3D:
+class Logger:
+    """
+    Универсальный класс для генерации численных логов для задачи любой размерности (n).
+    """
     @staticmethod
     def print_log(func, trajectory, method_name=""):
+        n_vars = len(trajectory[0])
+        
         print(f"\n{'='*80}")
-        print(f"ЛОГ ОПТИМИЗАЦИИ (n=3) | МЕТОД: {method_name}")
+        print(f"ЛОГ ОПТИМИЗАЦИИ (n={n_vars}) | МЕТОД: {method_name}")
         print(f"{'='*80}")
-        print(f"{'Итер':<5} | {'x1':<8} | {'x2':<8} | {'x3':<8} | {'f(x)':<12} | {'||∇f||':<12}")
+        
+        x_headers = " | ".join([f"x{j+1:<7}" for j in range(n_vars)])
+        print(f"{'Итер':<5} | {x_headers} | {'f(x)':<12} | {'||∇f||':<12}")
         print("-" * 80)
         
         for i, x in enumerate(trajectory):
             val = func(x)
             grad_norm = np.linalg.norm(func.gradient(x))
             
-            print(f"{i:<5} | {x[0]:>8.4f} | {x[1]:>8.4f} | {x[2]:>8.4f} | {val:>12.6f} | {grad_norm:>12.6e}")
+            x_vals = " | ".join([f"{xi:>8.4f}" for xi in x])
+
+            print(f"{i:<5} | {x_vals} | {val:>12.6f} | {grad_norm:>12.6e}")
             
         print(f"{'='*80}\n")
