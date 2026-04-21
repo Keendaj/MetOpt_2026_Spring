@@ -23,7 +23,7 @@ def main():
     }
     
     start_points = {
-        "2d": np.array([-2.0, 2.0]),
+        "2d": np.array([10.0, -10.0]),
         "3d": np.array([-1.0, 1.0, -1.0])
     }
     
@@ -140,6 +140,7 @@ def main():
                 print("[*] Подготовка графиков...")
                 func = functions["2d"]
                 traj = results[results_key]
+                print(traj)
                 vis = InteractiveVisualizer2D(func, traj, title=f"Метод: {active_opt.upper()}")
                 vis.show()
             else:

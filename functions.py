@@ -69,7 +69,7 @@ class SynthFunction3D(ObjectiveFunction):
     def __init__(self):
         self.vars = sp.symbols('x1 x2 x3')
         x1, x2, x3 = self.vars
-        self.expr = x1**2 + 2*x2**2 + 3*x3**2 + x1*x2 + x2*x3 + x1*x3 + sp.exp(x1) + sp.exp(x2) + sp.exp(x3)
+        self.expr = 2*x1**2 + 3*x2**2 + 4*x3**2 + x1*x2 + x1*x3 + x2*x3 + sp.exp(0.5*x1 - 0.3*x2 + 0.2*x3)
         super().__init__()
 
 class CustomFunction(ObjectiveFunction):
