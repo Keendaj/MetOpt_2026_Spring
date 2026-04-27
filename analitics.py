@@ -104,7 +104,7 @@ class Logger:
             grad_norm = np.linalg.norm(func.gradient(x))
             
             x_vals = " | ".join([f"{xi:>8.4f}" for xi in x])
-
+    
             print(f"{i:<5} | {x_vals} | {val:>12.6f} | {grad_norm:>12.6e}")
             
         print(f"{'='*80}\n")

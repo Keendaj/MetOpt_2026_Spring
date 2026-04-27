@@ -23,7 +23,7 @@ def main():
     }
     
     start_points = {
-        "2d": np.array([10.0, -10.0]),
+        "2d": np.array([3.0, -8.0]),
         "3d": np.array([-1.0, 1.0, -1.0])
     }
     
