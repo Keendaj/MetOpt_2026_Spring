@@ -2,6 +2,8 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import List
 from functions import ObjectiveFunction
+from scipy.optimize import minimize
+
 
 class BaseOptimizer(ABC):
     def __init__(self, epsilon: float = 1e-5, max_iter: int = 1000):
@@ -30,7 +32,7 @@ class GradientDescent(BaseOptimizer):
         
         for i in range(self.max_iter):
             grad = func.gradient(x)
-            
+
             if np.linalg.norm(grad) < self.epsilon:
                 print(f"Градиентный спуск сошелся за {i} итераций.")
                 break
@@ -45,7 +47,46 @@ class GradientDescent(BaseOptimizer):
         else:
             print(f"Градиентный спуск не сошелся за {self.max_iter} итераций.")
             
-        return np.array(trajectory)
+        traj_arr = np.array(trajectory)
+        
+        if len(traj_arr) > 2:
+            print("\n[*] Вычисление точного решения с помощью SciPy (BFGS)...")
+            res = minimize(func, x0, method='BFGS', tol=1e-14)
+            x_star_exact = res.x
+            print(f"[*] Точный x* найден: {x_star_exact}")
+            
+            q_values = []
+            table_rows = []
+            
+            for k in range(len(traj_arr) - 1):
+                num = np.linalg.norm(traj_arr[k+1] - x_star_exact)
+                den = np.linalg.norm(traj_arr[k] - x_star_exact)
+                
+                if den > 1e-16: 
+                    q_k = num / den
+                    q_values.append(q_k)
+                    table_rows.append((k, den, num, q_k))
+            
+            if q_values:
+                print("\n" + "="*75)
+                print(" ОЦЕНКА ЛИНЕЙНОЙ СКОРОСТИ СХОДИМОСТИ (Относительно точного x*)")
+                print("="*75)
+                print(f"{'k':<5} | {'||x_k - x*||':<18} | {'||x_{k+1} - x*||':<18} | {'q_k':<12}")
+                print("-" * 75)
+                
+                for k, den, num, q_k in table_rows:
+                    print(f"{k:<5} | {den:<18.6e} | {num:<18.6e} | {q_k:<12.6f}")
+                print("="*75)
+
+                q_asymptotic = q_values[-1]
+                print(f"Асимптотическая константа сходимости q: {q_asymptotic:.4f}")
+                
+                if 0 < q_asymptotic < 1:
+                    print("[+] Условие q ∈ (0, 1) выполняется. Линейная скорость сходимости подтверждена.\n")
+                else:
+                    print("[-] Условие линейной сходимости не подтверждено (q не входит в интервал (0, 1)).\n")
+        
+        return traj_arr
 
 class HookeJeeves(BaseOptimizer):
     def __init__(self, epsilon: float = 1e-5, max_iter: int = 1000, 
@@ -140,7 +181,9 @@ class NewtonMethod(BaseOptimizer):
         else:
             print(f"Метод Ньютона не сошелся за {self.max_iter} итераций.")
             
-        return np.array(trajectory)
+        traj_arr = np.array(trajectory)
+                    
+        return traj_arr
     
 class DFPMethod(BaseOptimizer):
     def optimize(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:

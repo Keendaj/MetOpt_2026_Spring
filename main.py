@@ -10,9 +10,11 @@ def print_help():
     print("pick_func [type] - Выбрать функцию: '2d' (тестовая) или '3d' (синтезируемая)")
     print("pick_opt [type]  - Выбрать метод: 'grad', 'hooke', 'newton', 'dfp'")
     print("set_start [x...] - Задать начальную точку (например: set_start -2.0 2.0)")
+    print("set_epsilon [v]  - Задать точность epsilon (например: set_epsilon 1e-6)")
     print("solve            - Решить текущую задачу выбранным методом")
     print("log              - Вывести численный лог (траекторию спуска) для текущей задачи")
     print("visualize        - Открыть графики (только для 2d задачи)")
+    print("analitics        - Вывод аналитических представлений Гессиана и угловых миноров для критерия Сильвестра")
     print("exit             - Выход")
     print("-------------------------\n")
 
@@ -27,11 +29,12 @@ def main():
         "3d": np.array([-1.0, 1.0, -1.0])
     }
     
+    active_epsilon = 1e-5
     optimizers = {
-        "grad": GradientDescent(epsilon=1e-5),
-        "hooke": HookeJeeves(epsilon=1e-5),
-        "newton": NewtonMethod(epsilon=1e-5),
-        "dfp": DFPMethod(epsilon=1e-5)
+        "grad": GradientDescent(epsilon=active_epsilon),
+        "hooke": HookeJeeves(epsilon=active_epsilon),
+        "newton": NewtonMethod(epsilon=active_epsilon),
+        "dfp": DFPMethod(epsilon=active_epsilon)
     }
 
     active_func = "2d"
@@ -43,7 +46,7 @@ def main():
     print_help()
 
     while True:
-        prompt = f"\n[{active_func} | {active_opt} | x0={start_points[active_func]}] > "
+        prompt = f"\n[{active_func} | {active_opt} | x0={start_points[active_func]} | eps={active_epsilon}] > "
         try:
             line = input(prompt).strip()
         except EOFError:
@@ -100,6 +103,22 @@ def main():
             else:
                 print("[!] Ошибка: укажите координаты (например, set_start 1.5 -2.0).")
 
+        elif command == "set_epsilon":
+            if len(parts) > 1:
+                try:
+                    new_eps = float(parts[1])
+                    if new_eps <= 0:
+                        print("[!] Ошибка: epsilon должен быть строго больше нуля.")
+                    else:
+                        active_epsilon = new_eps
+                        for opt in optimizers.values():
+                            opt.epsilon = active_epsilon
+                        print(f"[+] Точность epsilon успешно обновлена: {active_epsilon}")
+                except ValueError:
+                    print("[!] Ошибка: Значение должно быть числом (например, set_epsilon 1e-6).")
+            else:
+                print("[!] Ошибка: укажите значение (например, set_epsilon 1e-6).")
+
         elif command == "solve":
             print(f"\n[*] Подготовка задачи '{active_func}'...")
             func = functions[active_func]
@@ -107,10 +126,17 @@ def main():
             x0 = start_points[active_func]
             
             print("--- Аналитическая проверка ---")
-            func.is_strictly_convex(x0, verbose=True)
+            try:
+                func.analyze_convexity_symbolic()
+            except AttributeError:
+                print("[!] Внимание: Метод analyze_convexity_symbolic не найден. Возможно, вы забыли добавить его в functions.py")
             print("------------------------------")
-            
-            print(f"\n[*] Запуск метода '{active_opt}' из точки {x0}...")
+            is_continue = input("Введите Да, чтобы продолжить, если условия выполняются, любой другой ввод прекратит работу:\n")
+            if is_continue != "Да":
+                print("Подсчёт закончен, функция не подходит аналитически")
+                continue
+
+            print(f"\n[*] Запуск метода '{active_opt}' из точки {x0} (epsilon = {active_epsilon})...")
             try:
                 trajectory = opt.optimize(func, x0)
                 results_key = f"{active_func}_{active_opt}"
@@ -141,11 +167,19 @@ def main():
                 func = functions["2d"]
                 traj = results[results_key]
                 print(traj)
-                vis = InteractiveVisualizer2D(func, traj, title=f"Метод: {active_opt.upper()}")
+                vis = InteractiveVisualizer2D(func, traj, title=f"Метод: {active_opt.upper()}", epsilon=active_epsilon)
                 vis.show()
             else:
                 print("[!] Нет данных. Сначала запустите 'solve' для 2d задачи.")
-
+                
+        elif command == "analitics":
+            func = functions[active_func]
+            print("--- Аналитическая проверка ---")
+            try:
+                func.analyze_convexity_symbolic()
+            except AttributeError:
+                 print("[!] Внимание: Метод analyze_convexity_symbolic не найден в классе функции.")
+            print("------------------------------")
         else:
             print("[?] Неизвестная команда. Введите 'help'.")
 

@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 
 class InteractiveVisualizer2D:
-    def __init__(self, func, trajectory, title="Оптимизация"):
+    def __init__(self, func, trajectory, title="Оптимизация", epsilon=None):
         self.func = func
         self.traj = trajectory
         self.title = title
+        self.epsilon = epsilon
         self.current_step = 0
         self.max_steps = len(trajectory) - 1
 
@@ -76,7 +77,9 @@ class InteractiveVisualizer2D:
         val = self.func(current_traj[-1])
         grad_norm = np.linalg.norm(self.func.gradient(current_traj[-1]))
         
-        self.ax.set_title(f"{self.title}\nШаг {self.current_step}/{self.max_steps} | f(x) = {val:.4f} | ||∇f|| = {grad_norm:.2e}")
+        eps_str = f" | ε = {self.epsilon:.1e}" if self.epsilon is not None else ""
+        
+        self.ax.set_title(f"{self.title}\nШаг {self.current_step}/{self.max_steps} | f(x) = {val:.4f} | ||∇f|| = {grad_norm:.2e}{eps_str}")
         self.fig.canvas.draw_idle()
 
     def show(self):
@@ -84,9 +87,6 @@ class InteractiveVisualizer2D:
 
 
 class Logger:
-    """
-    Универсальный класс для генерации численных логов для задачи любой размерности (n).
-    """
     @staticmethod
     def print_log(func, trajectory, method_name=""):
         n_vars = len(trajectory[0])

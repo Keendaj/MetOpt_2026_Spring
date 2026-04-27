@@ -25,36 +25,25 @@ class ObjectiveFunction(ABC):
 
     def hessian(self, x: np.ndarray) -> np.ndarray:
         return np.array(self._hessian_lambda(x), dtype=float)
-
-    def is_strictly_convex(self, x: np.ndarray, verbose: bool = False) -> bool:
-        H = self.hessian(x)
-        n = H.shape[0]
-        is_convex = True
+    
+    def analyze_convexity_symbolic(self):
+        print(f"\n[{self.__class__.__name__}] Символьный анализ строгой выпуклости:")
+        print(f"Функция f(x) = {self.expr}")
         
-        if verbose:
-            print(f"Матрица Гессе (Гессиан) в точке {x}:")
-            for row in H:
-                print("  [" + "  ".join([f"{val:>8.4f}" for val in row]) + "]")
-                
+        grad_expr = [sp.diff(self.expr, var) for var in self.vars]
+        hessian_expr = sp.Matrix([[sp.diff(g, var) for var in self.vars] for g in grad_expr])
+        
+        print("\nСимвольная матрица Гессе (Гессиан):")
+        sp.pprint(hessian_expr)
+        
+        print("\nУгловые миноры (Критерий Сильвестра):")
+        n = len(self.vars)
         for i in range(1, n + 1):
-            minor = H[:i, :i]
-            det = np.linalg.det(minor)
+            minor = hessian_expr[:i, :i]
+            det_minor = sp.simplify(minor.det())
+            print(f"  Δ{i} = {det_minor}")
             
-            if verbose:
-                print(f"  Δ{i} (угловой минор {i}-го порядка) = {det:.4f}")
-                
-            if det <= 0:
-                is_convex = False
-                
-        if verbose:
-            if is_convex:
-                print("[+] Все Δ > 0. Критерий Сильвестра ВЫПОЛНЕН.")
-                print("[+] Функция строго выпукла. Условия применимости соблюдены.")
-            else:
-                print("[-] ВНИМАНИЕ: Не все Δ > 0. Критерий Сильвестра НЕ выполнен.")
-                print("[-] Функция не является строго выпуклой в этой точке. Методы могут не сойтись.")
-                
-        return is_convex
+        print("\n-> Для доказательства строгой выпуклости убедитесь, что все Δi > 0 при любых x.\n")
 
 
 class TestFunction2D(ObjectiveFunction):
