@@ -15,12 +15,17 @@ class BaseOptimizer(ABC):
         pass
 
     def _step_splitting(self, func: ObjectiveFunction, x: np.ndarray, direction: np.ndarray, 
-                        alpha_init: float = 1.0, beta: float = 0.5) -> float:
+                        alpha_init: float = 1.0, beta: float = 0.5, c1: float = 1e-4) -> float:
         alpha = alpha_init
         f_current = func(x)
+        grad_current = func.gradient(x)
 
-        while func(x + alpha * direction) >= f_current and alpha > 1e-10:
+        directional_derivative = np.dot(grad_current, direction)
+
+        while func(x + alpha * direction) > f_current + c1 * alpha * directional_derivative:
             alpha *= beta
+            if alpha <= 1e-10:
+                break
             
         return alpha
 
