@@ -77,21 +77,15 @@ class CustomFunction(ObjectiveFunction):
 
         super().__init__()
 
-if __name__ == "__main__":
-    f2d = TestFunction2D()
-    f3d = SynthFunction3D()
-    
-    x0_2d = np.array([1.0, 1.0])
-    x0_3d = np.array([1.0, 1.0, 1.0])
-    
-    print("TestFunction2D:")
-    print(f"  Значение в {x0_2d}: {f2d(x0_2d)}")
-    print(f"  Градиент в {x0_2d}: {f2d.gradient(x0_2d)}")
-    print(f"  Гессиан в {x0_2d}:\n{f2d.hessian(x0_2d)}")
-    print(f"  Строго выпукла: {f2d.is_strictly_convex(x0_2d)}\n")
-    
-    print("SynthFunction3D:")
-    print(f"  Значение в {x0_3d}: {f3d(x0_3d)}")
-    print(f"  Градиент в {x0_3d}: {f3d.gradient(x0_3d)}")
-    print(f"  Гессиан в {x0_3d}:\n{f3d.hessian(x0_3d)}")
-    print(f"  Строго выпукла: {f3d.is_strictly_convex(x0_3d)}")
+class HardcoreFunction3D(ObjectiveFunction):
+    def __init__(self):
+        self.vars = sp.symbols('x1 x2 x3')
+        x1, x2, x3 = self.vars
+        self.expr = (sp.exp(0.5 * x1) + 
+                     2 * sp.exp(0.2 * x2) + 
+                     (x1 - x2 + x3)**4 + 
+                     3 * x2**2 + 
+                     x3**2 - 
+                     x1 * x3 + 
+                     10 * x1)
+        super().__init__()

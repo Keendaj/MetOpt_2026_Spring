@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import List
 from functions import ObjectiveFunction
 from scipy.optimize import minimize
-
+from simplex import LPProblem
 
 class BaseOptimizer(ABC):
     def __init__(self, epsilon: float = 1e-5, max_iter: int = 1000):
@@ -14,264 +14,108 @@ class BaseOptimizer(ABC):
     def optimize(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:
         pass
 
-    def _step_splitting(self, func: ObjectiveFunction, x: np.ndarray, direction: np.ndarray, 
-                        alpha_init: float = 1.0, beta: float = 0.5, c1: float = 1e-4) -> float:
+    def _step_splitting(self, func: ObjectiveFunction, x: np.ndarray, direction: np.ndarray,
+                         alpha_init: float = 1.0, beta: float = 0.5, c1: float = 1e-4) -> float:
         alpha = alpha_init
         f_current = func(x)
         grad_current = func.gradient(x)
         directional_derivative = np.dot(grad_current, direction)
-
+        
         while func(x + alpha * direction) > f_current + c1 * alpha * directional_derivative:
             alpha *= beta
             if alpha <= 1e-10:
                 break
-            
+                
         return alpha
 
     def _get_exact_x_star(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:
-        """Вспомогательный метод для получения точного x* перед циклом (для логов)."""
         res = minimize(func, x0, method='BFGS', tol=1e-14)
         return res.x
 
-    def _log_step(self, step: int, x: np.ndarray, x_star: np.ndarray, 
-                  f_prev: float, f_current: float, grad: np.ndarray):
-        """Метод для вывода логов на каждом шаге."""
+    def _log_step(self, step: int, x: np.ndarray, x_star: np.ndarray,
+                   f_prev: float, f_current: float, grad: np.ndarray):
         norm_diff = np.linalg.norm(x - x_star)
         norm_diff_sq = norm_diff ** 2
         delta_f = f_prev - f_current
         grad_norm = np.linalg.norm(grad)
         
-        print(f"Шаг {step:<4} | "
+        print(f"  {step:<4} | "
               f"||x - x*||: {norm_diff:12.6e} | "
               f"||x - x*||^2: {norm_diff_sq:12.6e} | "
               f"f_prev - f_curr: {delta_f:12.6e} | "
               f"||grad||: {grad_norm:12.6e}")
 
+class ConditionalGradient(BaseOptimizer):
+    def __init__(self, A: np.ndarray, b: np.ndarray, signs: List[str] = None, is_free: List[bool] = None, eps: float = 1e-5, max_iter: int = 1000, 
+                 alpha_0: float = 1.0, lam: float = 0.5):
+        super().__init__(epsilon=eps, max_iter=max_iter) 
+        self.A = np.array(A, dtype=float)
+        self.b = np.array(b, dtype=float)
+        self.signs = signs if signs is not None else ['<='] * len(self.b)
+        self.is_free = is_free if is_free is not None else [False] * self.A.shape[1]
+        self.alpha_0 = alpha_0  
+        self.lam = lam
 
-class GradientDescent(BaseOptimizer):
-    def optimize(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:
-        x = np.array(x0, dtype=float)
-        trajectory = [x.copy()]
+    def optimize(self, func: ObjectiveFunction, x0: np.ndarray, verbose: bool = False) -> np.ndarray:
+        x_k = np.array(x0, dtype=float)
+        trajectory = [x_k.copy()]
         
-        x_star = self._get_exact_x_star(func, x0)
-        f_prev = func(x)
+        try:
+            x_star = self._get_exact_x_star(func, x0)
+        except Exception:
+            x_star = np.zeros_like(x0)
+            
+        phi_prev = func(x_k)
         
-        print("\n" + "-"*85)
-        print(" ЛОГИРОВАНИЕ: Градиентный спуск")
-        print("-" * 85)
+        if verbose:
+            print("\n" + "="*85)
+            print(f" ЗАПУСК: Метод условного градиента")
+            print(f" Параметры: alpha_0={self.alpha_0}, lambda={self.lam}, eps={self.epsilon}")
+            print("=" * 85)
         
-        for i in range(self.max_iter):
-            f_current = func(x)
-            grad = func.gradient(x)
+        for k in range(self.max_iter):
+            phi_x_k = func(x_k)
+            grad_phi = func.gradient(x_k)
+            
+            if verbose:
+                print(f"\n[Итерация {k}] Текущая точка x = {x_k}")
+                print(f"              Градиент ∇f(x) = {grad_phi}")
+            
+            lp = LPProblem(c=grad_phi, A=self.A, b=self.b, signs=self.signs, is_free=self.is_free, is_min=True, verbose=verbose)
+            y_k = lp.solve()
+            
+            if y_k is None:
+                if verbose:
+                    print(f"[-] ОШИБКА на шаге {k}: Вспомогательная задача ЛП не имеет решения.")
+                break
 
-            self._log_step(i, x, x_star, f_prev, f_current, grad)
-            f_prev = f_current
-
-            if np.linalg.norm(grad) < self.epsilon:
-                print(f"\n[+] Градиентный спуск сошелся за {i} итераций.")
+            s_k = y_k - x_k
+            eta_k = np.dot(grad_phi, s_k)
+            
+            if verbose:
+                print(f"  --> Направление спуска s = y* - x = {s_k}")
+                print(f"  --> Зазор эта (∇f * s) = {eta_k:.6e}")
+            
+            if eta_k >= -self.epsilon:
+                if verbose:
+                    print(f"\n[+] Оптимум достигнут на шаге {k}. (Зазор {eta_k:.6e} удовлетворяет eps {self.epsilon})")
                 break
                 
-            direction = -grad
-            alpha = self._step_splitting(func, x, direction)
-            x = x + alpha * direction
-            trajectory.append(x.copy())
+            alpha = self.alpha_0
             
-        else:
-            print(f"\n[-] Градиентный спуск не сошелся за {self.max_iter} итераций.")
-            
-        return np.array(trajectory)
-
-
-class HookeJeeves(BaseOptimizer):
-    def __init__(self, epsilon: float = 1e-5, max_iter: int = 1000, 
-                 step_size: float = 0.5, step_reduce: float = 2.0):
-        super().__init__(epsilon, max_iter)
-        self.step_size = step_size
-        self.step_reduce = step_reduce
-
-    def _exploratory_search(self, func: ObjectiveFunction, base_point: np.ndarray, step: float) -> np.ndarray:
-        x = base_point.copy()
-        n = len(x)
-        f_base = func(x)
-        
-        for i in range(n):
-            x[i] += step
-            f_new = func(x)
-            
-            if f_new < f_base:
-                f_base = f_new
-            else:
-                x[i] -= 2 * step
-                f_new = func(x)
-                if f_new < f_base:
-                    f_base = f_new 
-                else:
-                    x[i] += step
-                    
-        return x
-
-    def optimize(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:
-        x_base = np.array(x0, dtype=float)
-        trajectory = [x_base.copy()]
-        step = self.step_size
-        
-        x_star = self._get_exact_x_star(func, x0)
-        f_prev = func(x_base)
-        
-        print("\n" + "-"*85)
-        print(" ЛОГИРОВАНИЕ: Метод Хука-Дживса")
-        print("-" * 85)
-        
-        for i in range(self.max_iter):
-            f_current = func(x_base)
-            grad = func.gradient(x_base) 
-            self._log_step(i, x_base, x_star, f_prev, f_current, grad)
-            f_prev = f_current
-            
-            x_new = self._exploratory_search(func, x_base, step)
-            
-            if func(x_new) < func(x_base):
-                direction = x_new - x_base
-                x_pattern = x_new + direction
-                
-                x_base = x_new.copy()
-                trajectory.append(x_base.copy())
-                
-                x_pattern_explored = self._exploratory_search(func, x_pattern, step)
-
-                if func(x_pattern_explored) < func(x_base):
-                    x_base = x_pattern_explored.copy()
-                    trajectory.append(x_base.copy())
-            else:
-                step /= self.step_reduce
-                if step < self.epsilon:
-                    print(f"\n[+] Метод Хука-Дживса сошелся за {i} итераций.")
+            while func(x_k + alpha * s_k) - phi_x_k > alpha * eta_k / 2:
+                alpha *= self.lam 
+                if alpha < 1e-18:
                     break
-        else:
-            print(f"\n[-] Метод Хука-Дживса не сошелся за {self.max_iter} итераций.")
-            
-        return np.array(trajectory)
-    
 
-class NewtonMethod(BaseOptimizer):
-    def optimize(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:
-        x = np.array(x0, dtype=float)
-        trajectory = [x.copy()]
-        
-        x_star = self._get_exact_x_star(func, x0)
-        f_prev = func(x)
-        
-        print("\n" + "-"*85)
-        print(" ЛОГИРОВАНИЕ: Метод Ньютона")
-        print("-" * 85)
-        
-        for i in range(self.max_iter):
-            f_current = func(x)
-            grad = func.gradient(x)
-            
-            self._log_step(i, x, x_star, f_prev, f_current, grad)
-            f_prev = f_current
+            if verbose:
+                print(f"  --> Длина шага alpha = {alpha:.6f}")
 
-            if np.linalg.norm(grad) < self.epsilon:
-                print(f"\n[+] Метод Ньютона сошелся за {i} итераций.")
-                break
-                
-            hessian = func.hessian(x)
-            
-            try:
-                hessian_inv = np.linalg.inv(hessian)
-            except np.linalg.LinAlgError:
-                print(f"\nОшибка на итерации {i}: Гессиан вырожден (сингулярен), обращение невозможно.")
-                break
-
-            direction = -hessian_inv.dot(grad)
-            
-            if np.dot(grad, direction) > 0:
-                print(f"Внимание на итерации {i}: Направление не является убывающим. Переход на антиградиент.")
-                direction = -grad
-            
-            alpha = self._step_splitting(func, x, direction, alpha_init=1.0)
-            x = x + alpha * direction
-            trajectory.append(x.copy())
+            x_k = x_k + alpha * s_k
+            trajectory.append(x_k.copy())
             
         else:
-            print(f"\n[-] Метод Ньютона не сошелся за {self.max_iter} итераций.")
+            if verbose:
+                print(f"\n[-] Достигнуто максимальное число итераций ({self.max_iter}).")
             
         return np.array(trajectory)
-    
-
-class DFPMethod(BaseOptimizer):
-    def optimize(self, func: ObjectiveFunction, x0: np.ndarray) -> np.ndarray:
-        x = np.array(x0, dtype=float)
-        trajectory = [x.copy()]
-        n = len(x)
-        A = np.eye(n)
-        
-        x_star = self._get_exact_x_star(func, x0)
-        grad_current = func.gradient(x)
-        f_prev = func(x)
-        
-        print("\n" + "-"*85)
-        print(" ЛОГИРОВАНИЕ: Метод ДФП")
-        print("-" * 85)
-        
-        for i in range(self.max_iter):
-            f_current = func(x)
-            self._log_step(i, x, x_star, f_prev, f_current, grad_current)
-            f_prev = f_current
-
-            if np.linalg.norm(grad_current) < self.epsilon:
-                print(f"\n[+] Метод ДФП сошелся за {i} итераций.")
-                break
-                
-            direction = -A.dot(grad_current)
-            
-            if np.dot(grad_current, direction) > 0:
-                A = np.eye(n)
-                direction = -grad_current
-
-            alpha = self._step_splitting(func, x, direction)
-            
-            delta_x = alpha * direction
-            x_new = x + delta_x
-            trajectory.append(x_new.copy())
-            
-            grad_new = func.gradient(x_new)
-            delta_g = grad_new - grad_current
-            
-            dx_col = delta_x.reshape(-1, 1)
-            dg_col = delta_g.reshape(-1, 1)
-            
-            den1 = np.dot(delta_x, delta_g)
-            den2 = np.dot(delta_g, A.dot(delta_g))
-            
-            if abs(den1) > 1e-10 and abs(den2) > 1e-10:
-                term1 = (dx_col @ dx_col.T) / den1
-                Adg = A.dot(dg_col)
-                term2 = (Adg @ Adg.T) / den2
-                A = A + term1 - term2
-            
-            x = x_new
-            grad_current = grad_new
-            
-        else:
-            print(f"\n[-] Метод ДФП не сошелся за {self.max_iter} итераций.")
-            
-        return np.array(trajectory)
-
-
-if __name__ == "__main__":
-    class DummyFunc(ObjectiveFunction):
-        def __call__(self, x): return x[0]**2 + 3*x[1]**2
-        def gradient(self, x): return np.array([2*x[0], 6*x[1]])
-        def hessian(self, x): return np.array([[2, 0], [0, 6]])
-        
-    func = DummyFunc()
-    x0 = np.array([5.0, 5.0])
-
-    optimizer = GradientDescent(epsilon=1e-5)
-    traj = optimizer.optimize(func, x0)
-    
-    print(f"\nНачальная точка: {traj[0]}")
-    print(f"Конечная точка: {traj[-1]}")
-    print(f"Минимум функции: {func(traj[-1]):.6f}")
