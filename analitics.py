@@ -141,9 +141,7 @@ class InteractiveVisualizer3D:
         self.is_free = is_free if is_free is not None else ([False] * (A.shape[1] if A is not None else 3))
 
     def _get_polyhedron_faces(self):
-        """ Находит реальные грани многогранника для точной отрисовки """
         A_ext, b_ext = [], []
-        # Сбор всех ограничений в формат A*x <= b
         for i in range(len(self.b)):
             if self.signs[i] == '>=':
                 A_ext.append(-self.A[i]); b_ext.append(-self.b[i])
@@ -155,7 +153,6 @@ class InteractiveVisualizer3D:
                 row = np.zeros(3); row[j] = -1.0
                 A_ext.append(row); b_ext.append(0.0)
 
-        # Ограничивающий бокс для визуализации (от -20 до 20)
         span = 20.0
         for j in range(3):
             row = np.zeros(3); row[j] = 1.0; A_ext.append(row); b_ext.append(span)
@@ -164,10 +161,8 @@ class InteractiveVisualizer3D:
         A_ext, b_ext = np.array(A_ext), np.array(b_ext)
         faces_data = []
 
-        # Для каждой плоскости находим все вершины, которые лежат на ней
         for i in range(len(A_ext)):
             plane_vertices = []
-            # Ищем пересечения этой плоскости (i) с парами других (j, k)
             for j, k in itertools.combinations([idx for idx in range(len(A_ext)) if idx != i], 2):
                 A_sub = A_ext[[i, j, k]]
                 b_sub = b_ext[[i, j, k]]
@@ -179,11 +174,9 @@ class InteractiveVisualizer3D:
                 except: continue
             
             if len(plane_vertices) >= 3:
-                # Убираем дубликаты и сортируем точки по кругу, чтобы полигон не был "самопересекающимся"
                 pts = np.unique(np.round(plane_vertices, 5), axis=0)
                 if len(pts) < 3: continue
                 center = np.mean(pts, axis=0)
-                # Проекция на 2D для сортировки (выбираем оси в зависимости от нормали плоскости)
                 normal = A_ext[i]
                 ax_idx = np.argmin(np.abs(normal))
                 pts_2d = np.delete(pts - center, ax_idx, axis=1)
@@ -194,8 +187,7 @@ class InteractiveVisualizer3D:
 
     def show(self):
         fig = go.Figure()
-        
-        # 1. ОТРИСОВКА ГРАНЕЙ (КАЖДАЯ ГРАНЬ - ОТДЕЛЬНЫЙ ПОЛИГОН)
+
         if self.A is not None:
             faces = self._get_polyhedron_faces()
             for i, face in enumerate(faces):
@@ -204,27 +196,23 @@ class InteractiveVisualizer3D:
                     color='deepskyblue', opacity=0.2, 
                     showlegend=(i == 0), name='Грани ограничений'
                 ))
-                # Рисуем четкие ребра граней
                 f_edge = np.vstack([face, face[0]])
                 fig.add_trace(go.Scatter3d(
                     x=f_edge[:, 0], y=f_edge[:, 1], z=f_edge[:, 2],
                     mode='lines', line=dict(color='blue', width=2), showlegend=False
                 ))
 
-        # 2. ТРАЕКТОРИЯ
         fig.add_trace(go.Scatter3d(
             x=self.traj[:, 0], y=self.traj[:, 1], z=self.traj[:, 2],
             mode='lines+markers', line=dict(color='red', width=6),
             marker=dict(size=4, color='darkred'), name='Траектория'
         ))
 
-        # ТОЧКИ СТАРТА И МИНИМУМА
         fig.add_trace(go.Scatter3d(x=[self.traj[0,0]], y=[self.traj[0,1]], z=[self.traj[0,2]], 
                                    mode='markers', marker=dict(size=8, color='green'), name='Старт'))
         fig.add_trace(go.Scatter3d(x=[self.traj[-1,0]], y=[self.traj[-1,1]], z=[self.traj[-1,2]], 
                                    mode='markers', marker=dict(size=10, color='gold', symbol='diamond'), name='Минимум'))
 
-        # 3. НАСТРОЙКИ ЗОНЫ [-20, 20]
         ax_lim = dict(range=[-20, 20], autorange=False, backgroundcolor="rgb(230, 230,230)", gridcolor="white")
         fig.update_layout(
             title=f"<b>3D Оптимизация</b><br>f_min = {self.func(self.traj[-1]):.4f}",
