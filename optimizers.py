@@ -6,7 +6,7 @@ from scipy.optimize import minimize
 from simplex import LPProblem
 
 class BaseOptimizer(ABC):
-    def __init__(self, epsilon: float = 1e-5, max_iter: int = 1000):
+    def __init__(self, epsilon: float = 1e-5, max_iter: int = 10000):
         self.epsilon = epsilon
         self.max_iter = max_iter
 
@@ -55,10 +55,12 @@ class ConditionalGradient(BaseOptimizer):
         self.is_free = is_free if is_free is not None else [False] * self.A.shape[1]
         self.alpha_0 = alpha_0  
         self.lam = lam
+        self.eta_history = []
 
     def optimize(self, func: ObjectiveFunction, x0: np.ndarray, verbose: bool = False) -> np.ndarray:
         x_k = np.array(x0, dtype=float)
         trajectory = [x_k.copy()]
+        self.eta_history = [None]
         
         try:
             x_star = self._get_exact_x_star(func, x0)
@@ -89,10 +91,15 @@ class ConditionalGradient(BaseOptimizer):
                     print(f"[-] ОШИБКА на шаге {k}: Вспомогательная задача ЛП не имеет решения.")
                 break
 
+            eta_simplex = np.dot(grad_phi, y_k)
+            self.eta_history.append(eta_simplex)
+
             s_k = y_k - x_k
             eta_k = np.dot(grad_phi, s_k)
             
             if verbose:
+                print(f"  --> Решение ЛП y* = {y_k}")
+                print(f"  --> Ваша eta (∇f * y*) = {eta_simplex:.6e}")
                 print(f"  --> Направление спуска s = y* - x = {s_k}")
                 print(f"  --> Зазор эта (∇f * s) = {eta_k:.6e}")
             

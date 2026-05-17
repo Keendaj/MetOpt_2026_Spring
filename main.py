@@ -64,6 +64,7 @@ def main():
         
         "3d_inside": (
             np.array([
+                [-1.0, 0.0, 0.0],
                 [ 1.0,  1.0,  1.0],
                 [ 1.0,  1.0, -1.0],
                 [ 1.0, -1.0,  1.0],
@@ -73,8 +74,8 @@ def main():
                 [-1.0, -1.0,  1.0],
                 [-1.0, -1.0, -1.0]
             ]), 
-            np.array([20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]),
-            ['<=', '<=', '<=', '<=', '<=', '<=', '<=', '<='],
+            np.array([3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]),
+            ['<=', '<=', '<=', '<=', '<=', '<=', '<=', '<=', '<='],
             [True, True, True] 
         ),
         "3d_boundary": (
@@ -357,7 +358,15 @@ def main():
         elif command == "log":
             results_key = f"{active_func}_{active_const}_{active_opt}"
             if results_key in results:
-                Logger.print_log(functions[active_func], results[results_key], method_name=active_opt.upper())
+                current_opt = optimizers[active_opt]
+                eta_hist = getattr(current_opt, 'eta_history', None)
+                
+                Logger.print_log(
+                    functions[active_func], 
+                    results[results_key], 
+                    method_name=active_opt.upper(),
+                    eta_history=eta_hist
+                )
             else:
                 print("[!] Нет данных. Запустите 'solve' с текущими настройками.")
 
@@ -391,7 +400,9 @@ def main():
                     func, traj, 
                     title=f"Метод: {active_opt.upper()} (3D)", 
                     epsilon=active_epsilon,
-                    A=A_current, b=b_current
+                    A=A_current, b=b_current, 
+                    signs=signs_current,    
+                    is_free=free_current
                 )
                 vis.show()
             else:

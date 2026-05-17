@@ -223,13 +223,16 @@ class InteractiveVisualizer3D:
 
 class Logger:
     @staticmethod
-    def print_log(func, trajectory, method_name=""):
+    def print_log(func, trajectory, method_name="", eta_history=None):
         n_vars = len(trajectory[0])
         
         x_headers = " | ".join([f"x{j+1:<8}" for j in range(n_vars)])
         grad_headers = " | ".join([f"∇f_{j+1:<7}" for j in range(n_vars)])
         
         header = f"{'Итер':<5} | {x_headers} | {'f(x)':<12} | {'||Δx||':<10} | {'|Δf|':<10} | {grad_headers} | {'||∇f||':<10}"
+        if eta_history is not None:
+            header += f" | {'eta(∇f*y*)':<12}"
+            
         line_len = len(header)
         
         print(f"\n{'='*line_len}")
@@ -253,6 +256,12 @@ class Logger:
             grad_vals = " | ".join([f"{gi:>8.4f}" for gi in grad])
             
             row = f"{i:<5} | {x_vals} | {val:>12.6f} | {delta_x:>10.6f} | {delta_f:>10.6f} | {grad_vals} | {grad_norm:>10.6e}"
+            
+            if eta_history is not None and i < len(eta_history):
+                eta_val = eta_history[i]
+                eta_str = f"{eta_val:>12.6e}" if eta_val is not None else f"{'-':>12}"
+                row += f" | {eta_str}"
+                
             print(row)
             
             prev_x = x
